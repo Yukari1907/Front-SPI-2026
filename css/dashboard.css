@@ -1,0 +1,17 @@
+
+.dashboard-live{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    color:var(--success);
+    font-weight:700;
+}
+
+.dashboard-live::before{
+    content:"";
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    background:var(--success);
+    box-shadow:0 0 0 5px color-mix(in srgb,var(--success) 20%,transparent);
+}

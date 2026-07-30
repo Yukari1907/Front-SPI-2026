@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Administração - VisãoEPI Pro</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="css/components.css">
+    
+
+    <script src="js/theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/common.js" defer></script>
+    <script src="js/administracao.js" defer></script>
+</head>
+
+<body class="app-layout" data-page="admin">
+    <aside class="sidebar"><div class="brand"><i class="fa-solid fa-industry"></i><span>VisãoEPI Pro</span></div><ul class="nav"><li><a data-page="dashboard" href="dashboard.html"><i class="fa-solid fa-chart-line"></i><span>Dashboard</span></a></li><li><a data-page="monitoring" href="monitoramento.html"><i class="fa-solid fa-video"></i><span>Monitoramento</span></a></li><li><a data-page="alerts" href="alertas.html"><i class="fa-solid fa-bell"></i><span>Alertas</span></a></li><li><a data-page="inventory" href="inventario.html"><i class="fa-solid fa-boxes-stacked"></i><span>Inventário</span></a></li><li><a data-page="ppe" href="controle-de-epis.html"><i class="fa-solid fa-helmet-safety"></i><span>Controle de EPIs</span></a></li><li><a data-page="mapping" href="mapeamento.html"><i class="fa-solid fa-map-location-dot"></i><span>Mapeamento</span></a></li><li><a data-page="reports" href="relatorios.html"><i class="fa-solid fa-chart-column"></i><span>Relatórios</span></a></li><li><a data-page="admin" href="administracao.html"><i class="fa-solid fa-users-gear"></i><span>Administração</span></a></li><li><a data-page="settings" href="configuracao.html"><i class="fa-solid fa-gear"></i><span>Configurações</span></a></li><li><a data-page="profile" href="perfil.html"><i class="fa-solid fa-user"></i><span>Meu Perfil</span></a></li><li><a data-page="about" href="sobre.html"><i class="fa-solid fa-circle-info"></i><span>Sobre</span></a></li><li><a class="logout" href="#" onclick="logout();return false"><i class="fa-solid fa-right-from-bracket"></i><span>Sair</span></a></li></ul></aside>
+
+    <main class="main">
+        <div class="topbar">
+            <div class="page-title">
+                <h1>Administração</h1>
+                <p class="text-muted">Gerencie usuários, perfis, permissões e auditoria.</p>
+            </div>
+
+            
+<div class="top-actions">
+    <div class="search-global">
+        <input id="globalSearch" placeholder="Pesquisar no sistema">
+        <i class="fa-solid fa-magnifying-glass"></i>
+    </div>
+
+    <div class="notification-wrap">
+        <button class="notification-btn" id="notificationButton" type="button">
+            <i class="fa-solid fa-bell"></i>
+        </button>
+
+        <span class="notification-count">4</span>
+
+        <div class="notification-panel" id="notificationPanel">
+            <div class="section-title"><h3>Notificações</h3></div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
+                <div><strong>Estoque crítico</strong><p class="text-muted">Botina Nobuck com 5 unidades.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-video" style="color:var(--warning)"></i>
+                <div><strong>Câmera offline</strong><p class="text-muted">Câmera 03 perdeu conexão.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-calendar-days" style="color:var(--warning)"></i>
+                <div><strong>Validade próxima</strong><p class="text-muted">2 EPIs vencem em até 30 dias.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-shield-halved" style="color:var(--success)"></i>
+                <div><strong>Conformidade alta</strong><p class="text-muted">Turno atual com 96%.</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="user-chip" id="userChip"></div>
+</div>
+
+        </div>
+
+        
+<div class="grid kpi-grid">
+    <article class="card kpi"><i class="fa-solid fa-users"></i><h3>Usuários</h3><strong id="adminUsersCount">0</strong><p class="text-muted">Cadastrados</p></article>
+    <article class="card kpi"><i class="fa-solid fa-user-shield"></i><h3>Administradores</h3><strong id="adminAdminsCount">0</strong><p class="text-muted">Acesso total</p></article>
+    <article class="card kpi"><i class="fa-solid fa-key"></i><h3>Perfis</h3><strong>4</strong><p class="text-muted">De acesso</p></article>
+    <article class="card kpi"><i class="fa-solid fa-clock-rotate-left"></i><h3>Acessos</h3><strong id="adminLogsCount">0</strong><p class="text-muted">Logins registrados</p></article>
+</div>
+
+<article class="card table-card">
+    <div class="table-head">
+        <div><h2>Usuários e Permissões</h2></div>
+        <button class="btn" id="openUserModal" type="button" data-permission="users:create"><i class="fa-solid fa-user-plus"></i>Novo usuário</button>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Último acesso</th><th>Ações</th></tr>
+            </thead>
+            <tbody id="usersTable"></tbody>
+        </table>
+    </div>
+</article>
+
+    </main>
+
+
+<div class="modal" id="userModal">
+    <div class="modal-box">
+        <button class="modal-close" id="closeUserModal" type="button">&times;</button>
+
+        <div class="page-title" style="margin-bottom:20px">
+            <h2 id="userModalTitle">Cadastrar novo usuário</h2>
+            <p class="text-muted">Informe os dados e o perfil de acesso.</p>
+        </div>
+
+        <form id="userForm">
+            <input type="hidden" name="id">
+
+            <div class="modal-grid">
+                <div class="form-group">
+                    <label>Nome completo</label>
+                    <input name="name" required placeholder="Ex.: Ana Souza">
+                </div>
+
+                <div class="form-group">
+                    <label>E-mail</label>
+                    <input name="email" type="email" required placeholder="nome@empresa.com">
+                </div>
+
+                <div class="form-group">
+                    <label>Perfil de acesso</label>
+                    <select name="role" required>
+                        <option>Administrador</option>
+                        <option>Supervisor</option>
+                        <option>Operador</option>
+                        <option>Técnico de Segurança</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Unidade</label>
+                    <select name="unit">
+                        <option>Matriz</option>
+                        <option>Unidade Industrial 1</option>
+                        <option>Unidade Industrial 2</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Senha inicial</label>
+                    <input name="password" type="password" minlength="6" required placeholder="Mínimo de 6 caracteres">
+                </div>
+
+                <div class="form-group">
+                    <label>Status</label>
+                    <select name="status">
+                        <option>Ativo</option>
+                        <option>Bloqueado</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn secondary" id="cancelUserModal">Cancelar</button>
+                <button type="submit" class="btn"><i class="fa-solid fa-floppy-disk"></i>Salvar usuário</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+<div class="modal" id="userDetailsModal">
+    <div class="modal-box" style="width:min(760px,96vw)">
+        <button class="modal-close" id="closeUserDetailsModal" type="button">&times;</button>
+
+        <div class="page-title" style="margin-bottom:20px">
+            <h2>Detalhes e histórico de acesso</h2>
+            <p class="text-muted">Informações da conta e últimos logins registrados.</p>
+        </div>
+
+        <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-bottom:24px">
+            <div class="card" style="box-shadow:none"><small class="text-muted">Nome</small><strong id="userDetailsName" style="display:block;margin-top:5px">—</strong></div>
+            <div class="card" style="box-shadow:none"><small class="text-muted">E-mail</small><strong id="userDetailsEmail" style="display:block;margin-top:5px">—</strong></div>
+            <div class="card" style="box-shadow:none"><small class="text-muted">Perfil</small><strong id="userDetailsRole" style="display:block;margin-top:5px">—</strong></div>
+            <div class="card" style="box-shadow:none"><small class="text-muted">Unidade</small><strong id="userDetailsUnit" style="display:block;margin-top:5px">—</strong></div>
+            <div class="card" style="box-shadow:none"><small class="text-muted">Status</small><strong id="userDetailsStatus" style="display:block;margin-top:5px">—</strong></div>
+            <div class="card" style="box-shadow:none"><small class="text-muted">Quantidade de acessos</small><strong id="userDetailsAccessCount" style="display:block;margin-top:5px">0</strong></div>
+            <div class="card" style="box-shadow:none"><small class="text-muted">Último acesso</small><strong id="userDetailsLastAccess" style="display:block;margin-top:5px">Nunca</strong></div>
+            <div class="card" style="box-shadow:none"><small class="text-muted">Criado em</small><strong id="userDetailsCreatedAt" style="display:block;margin-top:5px">—</strong></div>
+            <div class="card" style="box-shadow:none"><small class="text-muted">Criado por</small><strong id="userDetailsCreatedBy" style="display:block;margin-top:5px">—</strong></div>
+        </div>
+
+        <div class="section-title"><h3>Últimos acessos</h3></div>
+        <div id="userLoginHistory"></div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn secondary" id="closeUserDetailsFooter">Fechar</button>
+        </div>
+    </div>
+</div>
+
+    <div id="toastContainer" class="toast-container"></div>
+</body>
+</html>

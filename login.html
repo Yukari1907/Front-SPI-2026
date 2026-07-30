@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Login - VisãoEPI Pro</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/auth.css">
+
+    <script src="js/theme.js"></script>
+    <script src="js/login.js" defer></script>
+</head>
+
+<body>
+    <main class="auth-page">
+        <section class="auth-hero">
+            <div class="auth-content">
+                <div class="auth-brand">
+                    <i class="fa-solid fa-industry"></i>
+                    VisãoEPI Pro
+                </div>
+
+                <h1>Segurança industrial orientada por dados.</h1>
+
+                <p>
+                    Monitore conformidade de EPIs, câmeras, inventário e alertas
+                    em uma única plataforma inteligente.
+                </p>
+
+                <div class="auth-features">
+                    <div class="auth-feature">
+                        <i class="fa-solid fa-video"></i>
+                        Monitoramento em tempo real
+                    </div>
+
+                    <div class="auth-feature">
+                        <i class="fa-solid fa-helmet-safety"></i>
+                        Detecção automatizada de EPIs
+                    </div>
+
+                    <div class="auth-feature">
+                        <i class="fa-solid fa-chart-line"></i>
+                        Indicadores para tomada de decisão
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="auth-panel">
+            <div class="auth-card">
+                <h2>Acessar sistema</h2>
+                <p class="text-muted">Entre com seu e-mail corporativo e senha.</p>
+
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label>E-mail</label>
+                        <input name="email" type="email" value="admin@visaoepi.com" required>
+                    </div>
+
+                    <div class="form-group password-field">
+                        <label>Senha</label>
+                        <input name="password" id="loginPassword" type="password" value="123456" required>
+
+                        <button type="button" class="password-toggle" id="passwordToggle">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+
+                    <div class="auth-options">
+                        <label>
+                            <input type="checkbox" id="rememberLogin">
+                            Lembrar acesso
+                        </label>
+
+                        <a href="#" id="forgotPassword">Esqueci minha senha</a>
+                    </div>
+
+                    <button class="btn auth-submit">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        Entrar
+                    </button>
+
+                    <div class="auth-message" id="loginMessage"></div>
+                </form>
+
+                <div class="demo-box">
+                    <strong>Acesso de demonstração</strong><br>
+                    E-mail: admin@visaoepi.com<br>
+                    Senha: 123456
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

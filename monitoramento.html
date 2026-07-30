@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Monitoramento em Tempo Real - VisãoEPI Pro</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="css/components.css">
+    
+
+    <script src="js/theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/common.js" defer></script>
+    <script src="js/monitoramento.js" defer></script>
+</head>
+
+<body class="app-layout" data-page="monitoring">
+    <aside class="sidebar"><div class="brand"><i class="fa-solid fa-industry"></i><span>VisãoEPI Pro</span></div><ul class="nav"><li><a data-page="dashboard" href="dashboard.html"><i class="fa-solid fa-chart-line"></i><span>Dashboard</span></a></li><li><a data-page="monitoring" href="monitoramento.html"><i class="fa-solid fa-video"></i><span>Monitoramento</span></a></li><li><a data-page="alerts" href="alertas.html"><i class="fa-solid fa-bell"></i><span>Alertas</span></a></li><li><a data-page="inventory" href="inventario.html"><i class="fa-solid fa-boxes-stacked"></i><span>Inventário</span></a></li><li><a data-page="ppe" href="controle-de-epis.html"><i class="fa-solid fa-helmet-safety"></i><span>Controle de EPIs</span></a></li><li><a data-page="mapping" href="mapeamento.html"><i class="fa-solid fa-map-location-dot"></i><span>Mapeamento</span></a></li><li><a data-page="reports" href="relatorios.html"><i class="fa-solid fa-chart-column"></i><span>Relatórios</span></a></li><li><a data-page="admin" href="administracao.html"><i class="fa-solid fa-users-gear"></i><span>Administração</span></a></li><li><a data-page="settings" href="configuracao.html"><i class="fa-solid fa-gear"></i><span>Configurações</span></a></li><li><a data-page="profile" href="perfil.html"><i class="fa-solid fa-user"></i><span>Meu Perfil</span></a></li><li><a data-page="about" href="sobre.html"><i class="fa-solid fa-circle-info"></i><span>Sobre</span></a></li><li><a class="logout" href="#" onclick="logout();return false"><i class="fa-solid fa-right-from-bracket"></i><span>Sair</span></a></li></ul></aside>
+
+    <main class="main">
+        <div class="topbar">
+            <div class="page-title">
+                <h1>Monitoramento em Tempo Real</h1>
+                <p class="text-muted">Acompanhe câmeras e eventos processados em tempo real.</p>
+            </div>
+
+            
+<div class="top-actions">
+    <div class="search-global">
+        <input id="globalSearch" placeholder="Pesquisar no sistema">
+        <i class="fa-solid fa-magnifying-glass"></i>
+    </div>
+
+    <div class="notification-wrap">
+        <button class="notification-btn" id="notificationButton" type="button">
+            <i class="fa-solid fa-bell"></i>
+        </button>
+
+        <span class="notification-count">4</span>
+
+        <div class="notification-panel" id="notificationPanel">
+            <div class="section-title"><h3>Notificações</h3></div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
+                <div><strong>Estoque crítico</strong><p class="text-muted">Botina Nobuck com 5 unidades.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-video" style="color:var(--warning)"></i>
+                <div><strong>Câmera offline</strong><p class="text-muted">Câmera 03 perdeu conexão.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-calendar-days" style="color:var(--warning)"></i>
+                <div><strong>Validade próxima</strong><p class="text-muted">2 EPIs vencem em até 30 dias.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-shield-halved" style="color:var(--success)"></i>
+                <div><strong>Conformidade alta</strong><p class="text-muted">Turno atual com 96%.</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="user-chip" id="userChip"></div>
+</div>
+
+        </div>
+
+        
+<div class="grid" style="grid-template-columns:2fr 1fr">
+    <article class="card">
+        <div class="section-title">
+            <h2>Stream de Monitoramento</h2>
+            <span class="badge success">AO VIVO</span>
+        </div>
+
+        <div style="min-height:520px;border-radius:14px;background:linear-gradient(135deg,#111827,#1f2937);display:flex;align-items:center;justify-content:center;color:#fff;position:relative;overflow:hidden">
+            <div style="text-align:center">
+                <i class="fa-solid fa-video" style="font-size:64px;opacity:.45"></i>
+                <h3 style="margin-top:16px">Feed da Câmera 03</h3>
+                <p style="opacity:.7">Integração preparada para YOLO/OpenCV</p>
+            </div>
+
+            <div style="position:absolute;left:28%;top:26%;width:180px;height:250px;border:3px solid #22c55e;border-radius:8px">
+                <span style="position:absolute;top:-26px;left:-3px;background:#22c55e;padding:4px 8px;border-radius:6px">
+                    Pessoa 98%
+                </span>
+            </div>
+        </div>
+    </article>
+
+    <aside class="grid" style="align-content:start">
+        <article class="card">
+            <div class="section-title"><h2>Câmeras</h2></div>
+            <div id="cameraList"></div>
+        </article>
+
+        <article class="card">
+            <div class="section-title"><h2>Desempenho</h2></div>
+
+            <p>FPS <strong style="float:right">28</strong></p>
+            <div class="progress" style="margin:8px 0 16px"><span style="width:88%"></span></div>
+
+            <p>Latência <strong style="float:right">46 ms</strong></p>
+            <div class="progress" style="margin-top:8px"><span style="width:32%"></span></div>
+        </article>
+    </aside>
+</div>
+
+    </main>
+
+    <div id="toastContainer" class="toast-container"></div>
+</body>
+</html>

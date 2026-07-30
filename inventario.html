@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Inventário - VisãoEPI Pro</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/inventory.css">
+
+    <script src="js/theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/common.js" defer></script>
+    <script src="js/inventario.js" defer></script>
+</head>
+
+<body class="app-layout" data-page="inventory">
+    <aside class="sidebar"><div class="brand"><i class="fa-solid fa-industry"></i><span>VisãoEPI Pro</span></div><ul class="nav"><li><a data-page="dashboard" href="dashboard.html"><i class="fa-solid fa-chart-line"></i><span>Dashboard</span></a></li><li><a data-page="monitoring" href="monitoramento.html"><i class="fa-solid fa-video"></i><span>Monitoramento</span></a></li><li><a data-page="alerts" href="alertas.html"><i class="fa-solid fa-bell"></i><span>Alertas</span></a></li><li><a data-page="inventory" href="inventario.html"><i class="fa-solid fa-boxes-stacked"></i><span>Inventário</span></a></li><li><a data-page="ppe" href="controle-de-epis.html"><i class="fa-solid fa-helmet-safety"></i><span>Controle de EPIs</span></a></li><li><a data-page="mapping" href="mapeamento.html"><i class="fa-solid fa-map-location-dot"></i><span>Mapeamento</span></a></li><li><a data-page="reports" href="relatorios.html"><i class="fa-solid fa-chart-column"></i><span>Relatórios</span></a></li><li><a data-page="admin" href="administracao.html"><i class="fa-solid fa-users-gear"></i><span>Administração</span></a></li><li><a data-page="settings" href="configuracao.html"><i class="fa-solid fa-gear"></i><span>Configurações</span></a></li><li><a data-page="profile" href="perfil.html"><i class="fa-solid fa-user"></i><span>Meu Perfil</span></a></li><li><a data-page="about" href="sobre.html"><i class="fa-solid fa-circle-info"></i><span>Sobre</span></a></li><li><a class="logout" href="#" onclick="logout();return false"><i class="fa-solid fa-right-from-bracket"></i><span>Sair</span></a></li></ul></aside>
+
+    <main class="main">
+        <div class="topbar">
+            <div class="page-title">
+                <h1>Inventário</h1>
+                <p class="text-muted">Controle estoque, validade e localização dos EPIs.</p>
+            </div>
+
+            
+<div class="top-actions">
+    <div class="search-global">
+        <input id="globalSearch" placeholder="Pesquisar no sistema">
+        <i class="fa-solid fa-magnifying-glass"></i>
+    </div>
+
+    <div class="notification-wrap">
+        <button class="notification-btn" id="notificationButton" type="button">
+            <i class="fa-solid fa-bell"></i>
+        </button>
+
+        <span class="notification-count">4</span>
+
+        <div class="notification-panel" id="notificationPanel">
+            <div class="section-title"><h3>Notificações</h3></div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
+                <div><strong>Estoque crítico</strong><p class="text-muted">Botina Nobuck com 5 unidades.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-video" style="color:var(--warning)"></i>
+                <div><strong>Câmera offline</strong><p class="text-muted">Câmera 03 perdeu conexão.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-calendar-days" style="color:var(--warning)"></i>
+                <div><strong>Validade próxima</strong><p class="text-muted">2 EPIs vencem em até 30 dias.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-shield-halved" style="color:var(--success)"></i>
+                <div><strong>Conformidade alta</strong><p class="text-muted">Turno atual com 96%.</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="user-chip" id="userChip"></div>
+</div>
+
+        </div>
+
+        
+<div class="top-actions" style="justify-content:flex-end;margin-bottom:20px">
+    <button class="btn secondary" id="exportInventory"><i class="fa-solid fa-file-arrow-down"></i>Exportar CSV</button>
+    <button class="btn" id="openInventoryModal"><i class="fa-solid fa-plus"></i>Registrar EPI</button>
+</div>
+
+<div class="grid kpi-grid">
+    <article class="card kpi"><i class="fa-solid fa-boxes-stacked"></i><h3>Total em Estoque</h3><strong id="invTotal">0</strong><p class="text-muted">Unidades disponíveis</p></article>
+    <article class="card kpi"><i class="fa-solid fa-user-shield"></i><h3>Em Uso</h3><strong id="invUse">0</strong><p class="text-muted">Equipamentos distribuídos</p></article>
+    <article class="card kpi"><i class="fa-solid fa-triangle-exclamation"></i><h3>Estoque Baixo</h3><strong id="invLow">0</strong><p class="text-muted">Reposição necessária</p></article>
+    <article class="card kpi"><i class="fa-solid fa-calendar-days"></i><h3>Próx. Validade</h3><strong id="invExpiry">0</strong><p class="text-muted">Vencem em até 30 dias</p></article>
+</div>
+
+<article class="card">
+    <div class="grid filters">
+        <div class="form-group"><label>Pesquisar</label><input id="inventorySearch" placeholder="Nome, código ou CA"></div>
+        <div class="form-group"><label>Categoria</label><select id="inventoryCategory"><option value="">Todas</option><option>Capacetes</option><option>Luvas</option><option>Óculos</option><option>Botinas</option><option>Máscaras</option></select></div>
+        <div class="form-group"><label>Status</label><select id="inventoryStatus"><option value="">Todos</option><option>Disponível</option><option>Estoque Baixo</option><option>Crítico</option></select></div>
+    </div>
+</article>
+
+<article class="card table-card" style="margin-top:24px">
+    <div class="table-head">
+        <div><h2>Estoque de EPIs</h2></div>
+        <button class="btn secondary" id="refreshInventory"><i class="fa-solid fa-arrows-rotate"></i>Atualizar</button>
+    </div>
+
+    <div class="table-wrap">
+        <table class="inventory-table">
+            <thead>
+                <tr><th>EPI</th><th>Categoria</th><th>CA</th><th>Estoque</th><th>Validade</th><th>Localização</th><th>Status</th><th>Ações</th></tr>
+            </thead>
+            <tbody id="inventoryTable"></tbody>
+        </table>
+    </div>
+
+    <div class="pagination" id="inventoryPagination"></div>
+</article>
+
+<div class="grid charts-grid">
+    <article class="card"><div class="section-title"><h2>Estoque por Categoria</h2></div><div class="chart-box"><canvas id="inventoryCategoryChart"></canvas></div></article>
+    <article class="card"><div class="section-title"><h2>Distribuição por Status</h2></div><div class="chart-box"><canvas id="inventoryStatusChart"></canvas></div></article>
+</div>
+
+
+<div class="grid inventory-insights-grid">
+    <article class="card">
+        <div class="section-title">
+            <h2>Últimas Movimentações</h2>
+        </div>
+
+        <div class="movement-list" id="movementList">
+            <div class="movement-item">
+                <div class="movement-icon success"><i class="fa-solid fa-plus"></i></div>
+                <div>
+                    <strong>Capacete MSA cadastrado</strong>
+                    <p class="text-muted">Hoje • 09:42</p>
+                </div>
+            </div>
+
+            <div class="movement-item">
+                <div class="movement-icon warning"><i class="fa-solid fa-box"></i></div>
+                <div>
+                    <strong>5 luvas entregues ao setor Prensa</strong>
+                    <p class="text-muted">Hoje • 09:15</p>
+                </div>
+            </div>
+
+            <div class="movement-item">
+                <div class="movement-icon danger"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                <div>
+                    <strong>Óculos próximo do vencimento</strong>
+                    <p class="text-muted">Hoje • 08:48</p>
+                </div>
+            </div>
+
+            <div class="movement-item">
+                <div class="movement-icon primary"><i class="fa-solid fa-pen"></i></div>
+                <div>
+                    <strong>Botina atualizada</strong>
+                    <p class="text-muted">Hoje • 08:10</p>
+                </div>
+            </div>
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="section-title">
+            <h2>Próximas Validades</h2>
+        </div>
+
+        <div class="table-wrap compact-table-wrap">
+            <table class="expiry-table">
+                <thead>
+                    <tr>
+                        <th>EPI</th>
+                        <th>Validade</th>
+                    </tr>
+                </thead>
+                <tbody id="expiryTableBody"></tbody>
+            </table>
+        </div>
+    </article>
+</div>
+
+<div class="modal" id="inventoryModal">
+    <div class="modal-box">
+        <button class="modal-close" id="closeInventoryModal">&times;</button>
+
+        <div class="page-title" style="margin-bottom:18px">
+            <h2 id="inventoryModalTitle">Cadastrar EPI</h2>
+        </div>
+
+        <form id="inventoryForm">
+            <input type="hidden" name="id">
+
+            <div class="modal-grid">
+                <div class="form-group"><label>Nome</label><input name="name" required></div>
+                <div class="form-group"><label>Código</label><input name="code" required></div>
+                <div class="form-group"><label>Categoria</label><select name="category" required><option>Capacetes</option><option>Luvas</option><option>Óculos</option><option>Botinas</option><option>Máscaras</option></select></div>
+                <div class="form-group"><label>CA</label><input name="certificate"></div>
+                <div class="form-group"><label>Quantidade</label><input type="number" name="quantity" value="0"></div>
+                <div class="form-group"><label>Quantidade mínima</label><input type="number" name="minimumQuantity" value="0"></div>
+                <div class="form-group"><label>Em uso</label><input type="number" name="inUse" value="0"></div>
+                <div class="form-group"><label>Validade</label><input type="date" name="expiration"></div>
+                <div class="form-group"><label>Localização</label><input name="location"></div>
+                <div class="form-group"><label>Status</label><select name="status"><option value="">Automático</option><option>Disponível</option><option>Estoque Baixo</option><option>Crítico</option></select></div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn secondary" id="cancelInventoryModal">Cancelar</button>
+                <button class="btn">Salvar EPI</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+    </main>
+
+    <div id="toastContainer" class="toast-container"></div>
+</body>
+</html>

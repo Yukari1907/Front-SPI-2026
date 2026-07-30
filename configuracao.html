@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Configurações - VisãoEPI Pro</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="css/components.css">
+    
+
+    <script src="js/theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/common.js" defer></script>
+    <script src="js/configuracao.js" defer></script>
+</head>
+
+<body class="app-layout" data-page="settings">
+    <aside class="sidebar"><div class="brand"><i class="fa-solid fa-industry"></i><span>VisãoEPI Pro</span></div><ul class="nav"><li><a data-page="dashboard" href="dashboard.html"><i class="fa-solid fa-chart-line"></i><span>Dashboard</span></a></li><li><a data-page="monitoring" href="monitoramento.html"><i class="fa-solid fa-video"></i><span>Monitoramento</span></a></li><li><a data-page="alerts" href="alertas.html"><i class="fa-solid fa-bell"></i><span>Alertas</span></a></li><li><a data-page="inventory" href="inventario.html"><i class="fa-solid fa-boxes-stacked"></i><span>Inventário</span></a></li><li><a data-page="ppe" href="controle-de-epis.html"><i class="fa-solid fa-helmet-safety"></i><span>Controle de EPIs</span></a></li><li><a data-page="mapping" href="mapeamento.html"><i class="fa-solid fa-map-location-dot"></i><span>Mapeamento</span></a></li><li><a data-page="reports" href="relatorios.html"><i class="fa-solid fa-chart-column"></i><span>Relatórios</span></a></li><li><a data-page="admin" href="administracao.html"><i class="fa-solid fa-users-gear"></i><span>Administração</span></a></li><li><a data-page="settings" href="configuracao.html"><i class="fa-solid fa-gear"></i><span>Configurações</span></a></li><li><a data-page="profile" href="perfil.html"><i class="fa-solid fa-user"></i><span>Meu Perfil</span></a></li><li><a data-page="about" href="sobre.html"><i class="fa-solid fa-circle-info"></i><span>Sobre</span></a></li><li><a class="logout" href="#" onclick="logout();return false"><i class="fa-solid fa-right-from-bracket"></i><span>Sair</span></a></li></ul></aside>
+
+    <main class="main">
+        <div class="topbar">
+            <div class="page-title">
+                <h1>Configurações</h1>
+                <p class="text-muted">Configure IA, notificações, integrações e aparência.</p>
+            </div>
+
+            
+<div class="top-actions">
+    <div class="search-global">
+        <input id="globalSearch" placeholder="Pesquisar no sistema">
+        <i class="fa-solid fa-magnifying-glass"></i>
+    </div>
+
+    <div class="notification-wrap">
+        <button class="notification-btn" id="notificationButton" type="button">
+            <i class="fa-solid fa-bell"></i>
+        </button>
+
+        <span class="notification-count">4</span>
+
+        <div class="notification-panel" id="notificationPanel">
+            <div class="section-title"><h3>Notificações</h3></div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
+                <div><strong>Estoque crítico</strong><p class="text-muted">Botina Nobuck com 5 unidades.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-video" style="color:var(--warning)"></i>
+                <div><strong>Câmera offline</strong><p class="text-muted">Câmera 03 perdeu conexão.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-calendar-days" style="color:var(--warning)"></i>
+                <div><strong>Validade próxima</strong><p class="text-muted">2 EPIs vencem em até 30 dias.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-shield-halved" style="color:var(--success)"></i>
+                <div><strong>Conformidade alta</strong><p class="text-muted">Turno atual com 96%.</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="user-chip" id="userChip"></div>
+</div>
+
+        </div>
+
+        
+<div class="top-actions" style="justify-content:flex-end;margin-bottom:20px">
+    <button class="btn" id="saveSettings"><i class="fa-solid fa-floppy-disk"></i>Salvar alterações</button>
+</div>
+
+<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+    <article class="card">
+        <div class="section-title"><h2>Visão Computacional</h2></div>
+
+        <div class="grid">
+            <div class="form-group">
+                <label>Modelo</label>
+                <select id="model">
+                    <option>YOLOv8</option>
+                    <option>YOLOv11</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Confiança mínima</label>
+                <input id="confidence" type="range" min="40" max="95" value="75">
+                <span id="confidenceValue">75%</span>
+            </div>
+
+            <label><input type="checkbox" checked> Detectar óculos</label>
+            <label><input type="checkbox" checked> Detectar área restrita</label>
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="section-title"><h2>Notificações</h2></div>
+
+        <div class="grid">
+            <label><input type="checkbox" checked> Notificação por e-mail</label>
+            <label><input type="checkbox" checked> Aviso sonoro</label>
+            <label><input type="checkbox"> Alertar supervisor</label>
+
+            <div class="form-group">
+                <label>E-mail do supervisor</label>
+                <input type="email" placeholder="supervisor@empresa.com">
+            </div>
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="section-title"><h2>Aparência</h2></div>
+
+        <div class="form-group">
+            <label>Tema</label>
+            <select id="themeSelect">
+                <option value="light">Claro</option>
+                <option value="dark">Escuro</option>
+            </select>
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="section-title"><h2>Integrações</h2></div>
+
+        <div class="form-group">
+            <label>URL da API</label>
+            <input value="http://localhost:8080/api">
+        </div>
+
+        <div class="form-group" style="margin-top:14px">
+            <label>WebSocket</label>
+            <input value="ws://localhost:8080/ws">
+        </div>
+    </article>
+</div>
+
+    </main>
+
+    <div id="toastContainer" class="toast-container"></div>
+</body>
+</html>

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Controle de EPIs - VisãoEPI Pro</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <link rel="stylesheet" href="css/components.css">
+    
+
+    <script src="js/theme.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/common.js" defer></script>
+    <script src="js/controle.js" defer></script>
+</head>
+
+<body class="app-layout" data-page="ppe">
+    <aside class="sidebar"><div class="brand"><i class="fa-solid fa-industry"></i><span>VisãoEPI Pro</span></div><ul class="nav"><li><a data-page="dashboard" href="dashboard.html"><i class="fa-solid fa-chart-line"></i><span>Dashboard</span></a></li><li><a data-page="monitoring" href="monitoramento.html"><i class="fa-solid fa-video"></i><span>Monitoramento</span></a></li><li><a data-page="alerts" href="alertas.html"><i class="fa-solid fa-bell"></i><span>Alertas</span></a></li><li><a data-page="inventory" href="inventario.html"><i class="fa-solid fa-boxes-stacked"></i><span>Inventário</span></a></li><li><a data-page="ppe" href="controle-de-epis.html"><i class="fa-solid fa-helmet-safety"></i><span>Controle de EPIs</span></a></li><li><a data-page="mapping" href="mapeamento.html"><i class="fa-solid fa-map-location-dot"></i><span>Mapeamento</span></a></li><li><a data-page="reports" href="relatorios.html"><i class="fa-solid fa-chart-column"></i><span>Relatórios</span></a></li><li><a data-page="admin" href="administracao.html"><i class="fa-solid fa-users-gear"></i><span>Administração</span></a></li><li><a data-page="settings" href="configuracao.html"><i class="fa-solid fa-gear"></i><span>Configurações</span></a></li><li><a data-page="profile" href="perfil.html"><i class="fa-solid fa-user"></i><span>Meu Perfil</span></a></li><li><a data-page="about" href="sobre.html"><i class="fa-solid fa-circle-info"></i><span>Sobre</span></a></li><li><a class="logout" href="#" onclick="logout();return false"><i class="fa-solid fa-right-from-bracket"></i><span>Sair</span></a></li></ul></aside>
+
+    <main class="main">
+        <div class="topbar">
+            <div class="page-title">
+                <h1>Controle de EPIs</h1>
+                <p class="text-muted">Gerencie colaboradores, entregas, devoluções e conformidade.</p>
+            </div>
+
+            
+<div class="top-actions">
+    <div class="search-global">
+        <input id="globalSearch" placeholder="Pesquisar no sistema">
+        <i class="fa-solid fa-magnifying-glass"></i>
+    </div>
+
+    <div class="notification-wrap">
+        <button class="notification-btn" id="notificationButton" type="button">
+            <i class="fa-solid fa-bell"></i>
+        </button>
+
+        <span class="notification-count">4</span>
+
+        <div class="notification-panel" id="notificationPanel">
+            <div class="section-title"><h3>Notificações</h3></div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
+                <div><strong>Estoque crítico</strong><p class="text-muted">Botina Nobuck com 5 unidades.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-video" style="color:var(--warning)"></i>
+                <div><strong>Câmera offline</strong><p class="text-muted">Câmera 03 perdeu conexão.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-calendar-days" style="color:var(--warning)"></i>
+                <div><strong>Validade próxima</strong><p class="text-muted">2 EPIs vencem em até 30 dias.</p></div>
+            </div>
+
+            <div class="notification-item">
+                <i class="fa-solid fa-shield-halved" style="color:var(--success)"></i>
+                <div><strong>Conformidade alta</strong><p class="text-muted">Turno atual com 96%.</p></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="user-chip" id="userChip"></div>
+</div>
+
+        </div>
+
+        
+<div class="grid kpi-grid">
+    <article class="card kpi"><i class="fa-solid fa-users"></i><h3>Colaboradores</h3><strong>64</strong><p class="text-muted">Monitorados hoje</p></article>
+    <article class="card kpi"><i class="fa-solid fa-circle-check"></i><h3>Conformes</h3><strong>58</strong><p class="text-muted">Uso correto</p></article>
+    <article class="card kpi"><i class="fa-solid fa-triangle-exclamation"></i><h3>Não Conformes</h3><strong>6</strong><p class="text-muted">Requerem atenção</p></article>
+    <article class="card kpi"><i class="fa-solid fa-graduation-cap"></i><h3>Treinamentos</h3><strong>9</strong><p class="text-muted">Pendentes</p></article>
+</div>
+
+<div class="grid charts-grid">
+    <article class="card"><div class="section-title"><h2>Conformidade por Setor</h2></div><div class="chart-box"><canvas id="sectorChart"></canvas></div></article>
+    <article class="card"><div class="section-title"><h2>Não conformidades por EPI</h2></div><div class="chart-box"><canvas id="ppeIssueChart"></canvas></div></article>
+</div>
+
+<article class="card table-card">
+    <div class="table-head"><div><h2>Colaboradores Monitorados</h2></div></div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Colaborador</th><th>Setor</th><th>Última verificação</th><th>Status</th><th>Ação</th></tr>
+            </thead>
+            <tbody id="workersTable"></tbody>
+        </table>
+    </div>
+</article>
+
+    </main>
+
+
+<div class="modal" id="workerModal">
+    <div class="modal-box worker-modal-box">
+        <button class="modal-close" id="closeWorkerModal" type="button">&times;</button>
+
+        <div class="page-title" style="margin-bottom:20px">
+            <h2>Detalhes do Colaborador</h2>
+            <p class="text-muted">Informações da última verificação de EPIs.</p>
+        </div>
+
+        <div class="worker-profile">
+            <div class="avatar worker-avatar" id="workerAvatar">AS</div>
+            <div>
+                <h3 id="workerName">Ana Souza</h3>
+                <p class="text-muted" id="workerSector">Produção</p>
+            </div>
+        </div>
+
+        <div class="worker-detail-grid">
+            <div class="worker-detail-card"><span>Última verificação</span><strong id="workerLastCheck">14:32</strong></div>
+            <div class="worker-detail-card"><span>Status</span><strong id="workerStatus">Conforme</strong></div>
+            <div class="worker-detail-card"><span>Matrícula</span><strong id="workerRegistration">COL-001</strong></div>
+            <div class="worker-detail-card"><span>Turno</span><strong id="workerShift">Manhã</strong></div>
+        </div>
+
+        <div class="card" style="box-shadow:none;margin-top:20px">
+            <div class="section-title"><h3>EPIs identificados</h3></div>
+            <div id="workerPpeList" class="worker-ppe-list"></div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn secondary" id="closeWorkerModalFooter" type="button">Fechar</button>
+            <button class="btn" type="button" id="registerWorkerAction"><i class="fa-solid fa-clipboard-check"></i>Registrar ação</button>
+        </div>
+    </div>
+</div>
+
+    <div id="toastContainer" class="toast-container"></div>
+</body>
+</html>
