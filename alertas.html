@@ -79,9 +79,9 @@
 
 <article class="card">
     <div class="grid filters">
-        <div class="form-group"><label>Pesquisar</label><input placeholder="Tipo, setor ou câmera"></div>
-        <div class="form-group"><label>Severidade</label><select><option>Todas</option><option>Crítico</option><option>Médio</option><option>Baixo</option></select></div>
-        <div class="form-group"><label>Status</label><select><option>Todos</option><option>Pendente</option><option>Em análise</option><option>Resolvido</option></select></div>
+        <div class="form-group"><label for="alertSearch">Pesquisar</label><input id="alertSearch" type="search" placeholder="Tipo, setor, câmera ou trabalhador"></div>
+        <div class="form-group"><label for="alertSeverity">Severidade</label><select id="alertSeverity"><option value="">Todas</option><option value="Crítico">Crítico</option><option value="Médio">Médio</option><option value="Baixo">Baixo</option></select></div>
+        <div class="form-group"><label for="alertStatus">Status</label><select id="alertStatus"><option value="">Todos</option><option value="Pendente">Pendente</option><option value="Em análise">Em análise</option><option value="Resolvido">Resolvido</option></select></div>
     </div>
 </article>
 
@@ -99,6 +99,135 @@
 </article>
 
     </main>
+
+
+<div class="modal" id="alertDetailsModal">
+    <div class="modal-box" style="width:min(760px,96vw)">
+        <button
+            class="modal-close"
+            id="closeAlertDetailsModal"
+            type="button"
+            aria-label="Fechar"
+        >
+            &times;
+        </button>
+
+        <div class="page-title" style="margin-bottom:20px">
+            <h2 id="alertDetailTitle">Detalhes do alerta</h2>
+            <p class="text-muted">
+                Informações completas da ocorrência detectada.
+            </p>
+        </div>
+
+        <div
+            class="grid"
+            style="
+                grid-template-columns:repeat(2,minmax(0,1fr));
+                margin-bottom:22px;
+            "
+        >
+            <div class="card" style="box-shadow:none">
+                <small class="text-muted">Data e hora</small>
+                <strong
+                    id="alertDetailDate"
+                    style="display:block;margin-top:5px"
+                >
+                    —
+                </strong>
+            </div>
+
+            <div class="card" style="box-shadow:none">
+                <small class="text-muted">Setor</small>
+                <strong
+                    id="alertDetailSector"
+                    style="display:block;margin-top:5px"
+                >
+                    —
+                </strong>
+            </div>
+
+            <div class="card" style="box-shadow:none">
+                <small class="text-muted">Câmera</small>
+                <strong
+                    id="alertDetailCamera"
+                    style="display:block;margin-top:5px"
+                >
+                    —
+                </strong>
+            </div>
+
+            <div class="card" style="box-shadow:none">
+                <small class="text-muted">Trabalhador</small>
+                <strong
+                    id="alertDetailWorker"
+                    style="display:block;margin-top:5px"
+                >
+                    —
+                </strong>
+            </div>
+
+            <div class="card" style="box-shadow:none">
+                <small class="text-muted">Severidade</small>
+                <strong
+                    id="alertDetailSeverity"
+                    style="display:block;margin-top:5px"
+                >
+                    —
+                </strong>
+            </div>
+
+            <div class="card" style="box-shadow:none">
+                <small class="text-muted">Status</small>
+                <strong
+                    id="alertDetailStatus"
+                    style="display:block;margin-top:5px"
+                >
+                    —
+                </strong>
+            </div>
+        </div>
+
+        <div class="card" style="box-shadow:none;margin-bottom:16px">
+            <small class="text-muted">Descrição</small>
+            <p
+                id="alertDetailDescription"
+                style="margin-top:8px;line-height:1.7"
+            >
+                —
+            </p>
+        </div>
+
+        <div class="card" style="box-shadow:none">
+            <small class="text-muted">Ação recomendada/realizada</small>
+            <p
+                id="alertDetailAction"
+                style="margin-top:8px;line-height:1.7"
+            >
+                —
+            </p>
+        </div>
+
+        <div class="modal-footer">
+            <button
+                class="btn secondary"
+                id="closeAlertDetailsFooter"
+                type="button"
+            >
+                Fechar
+            </button>
+
+            <button
+                class="btn success"
+                id="resolveAlertButton"
+                type="button"
+                data-permission="alerts:manage"
+            >
+                <i class="fa-solid fa-circle-check"></i>
+                Marcar como resolvido
+            </button>
+        </div>
+    </div>
+</div>
 
     <div id="toastContainer" class="toast-container"></div>
 </body>

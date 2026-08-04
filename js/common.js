@@ -246,8 +246,8 @@ function createUserChip(profile){
         <button id="userChipButton" type="button">
             <span class="avatar">${initials(profile.name)}</span>
 
-            <span class="user-copy">
-                <strong>${escapeHtml(profile.name)}</strong>
+            <span>
+                <strong>${escapeHtml(profile.name)}</strong><br>
                 <small>${escapeHtml(profile.role)}</small>
             </span>
 
@@ -303,6 +303,271 @@ function configureNotifications(){
     document.addEventListener("click",()=>panel.classList.remove("active"));
 }
 
+
+/* =========================================================
+   PESQUISA GLOBAL
+========================================================= */
+
+const GLOBAL_SEARCH_ITEMS = [
+    {
+        page: "dashboard",
+        title: "Dashboard",
+        description: "Visão geral, conformidade, câmeras e indicadores",
+        href: "dashboard.html",
+        icon: "fa-chart-line",
+        keywords: ["dashboard", "visão geral", "indicadores", "conformidade"]
+    },
+    {
+        page: "monitoring",
+        title: "Monitoramento",
+        description: "Câmeras e processamento em tempo real",
+        href: "monitoramento.html",
+        icon: "fa-video",
+        keywords: ["monitoramento", "câmeras", "camera", "yolo", "tempo real"]
+    },
+    {
+        page: "alerts",
+        title: "Alertas",
+        description: "Ocorrências, severidades e resolução",
+        href: "alertas.html",
+        icon: "fa-bell",
+        keywords: ["alertas", "ocorrências", "incidentes", "severidade"]
+    },
+    {
+        page: "inventory",
+        title: "Inventário",
+        description: "Estoque, validade e cadastro de EPIs",
+        href: "inventario.html",
+        icon: "fa-boxes-stacked",
+        keywords: ["inventário", "estoque", "validade", "epi"]
+    },
+    {
+        page: "ppe",
+        title: "Controle de EPIs",
+        description: "Colaboradores, entregas e conformidade",
+        href: "controle-de-epis.html",
+        icon: "fa-helmet-safety",
+        keywords: ["controle", "epis", "colaboradores", "entregas"]
+    },
+    {
+        page: "mapping",
+        title: "Mapeamento",
+        description: "Setores, câmeras e zonas de risco",
+        href: "mapeamento.html",
+        icon: "fa-map-location-dot",
+        keywords: ["mapeamento", "mapa", "setores", "zonas de risco"]
+    },
+    {
+        page: "reports",
+        title: "Relatórios",
+        description: "Indicadores, gráficos e exportações",
+        href: "relatorios.html",
+        icon: "fa-chart-column",
+        keywords: ["relatórios", "relatorio", "csv", "gráficos"]
+    },
+    {
+        page: "admin",
+        title: "Administração",
+        description: "Usuários, permissões e histórico de acessos",
+        href: "administracao.html",
+        icon: "fa-users-gear",
+        keywords: ["administração", "usuários", "permissões", "acessos"]
+    },
+    {
+        page: "settings",
+        title: "Configurações",
+        description: "Tema, IA, notificações e integrações",
+        href: "configuracao.html",
+        icon: "fa-gear",
+        keywords: ["configurações", "tema", "yolo", "api"]
+    },
+    {
+        page: "profile",
+        title: "Meu Perfil",
+        description: "Dados pessoais e preferências",
+        href: "perfil.html",
+        icon: "fa-user",
+        keywords: ["perfil", "conta", "senha", "dados pessoais"]
+    },
+    {
+        page: "about",
+        title: "Sobre",
+        description: "Informações sobre o VisãoEPI Pro",
+        href: "sobre.html",
+        icon: "fa-circle-info",
+        keywords: ["sobre", "sistema", "tecnologias", "versão"]
+    }
+];
+
+function normalizeSearchText(value){
+    return String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
+}
+
+function configureGlobalSearch(){
+    const input = document.getElementById("globalSearch");
+
+    if(!input){
+        return;
+    }
+
+    const wrapper = input.closest(".search-global");
+
+    if(!wrapper){
+        return;
+    }
+
+    let results = wrapper.querySelector(".search-results");
+
+    if(!results){
+        results = document.createElement("div");
+        results.className = "search-results";
+        results.setAttribute("role", "listbox");
+        wrapper.appendChild(results);
+    }
+
+    let visibleItems = [];
+    let selectedIndex = -1;
+
+    function closeResults(){
+        results.classList.remove("active");
+        selectedIndex = -1;
+    }
+
+    function openPage(index){
+        const item = visibleItems[index];
+
+        if(item){
+            window.location.href = item.href;
+        }
+    }
+
+    function updateSelection(){
+        results.querySelectorAll(".search-result-item").forEach((button, index)=>{
+            button.classList.toggle("selected", index === selectedIndex);
+        });
+    }
+
+    function renderResults(){
+        const term = normalizeSearchText(input.value);
+
+        if(!term){
+            closeResults();
+            results.innerHTML = "";
+            return;
+        }
+
+        visibleItems = GLOBAL_SEARCH_ITEMS.filter(item=>{
+            const allowed = typeof canAccessPage === "function"
+                ? canAccessPage(item.page)
+                : true;
+
+            const searchable = normalizeSearchText([
+                item.title,
+                item.description,
+                ...(item.keywords || [])
+            ].join(" "));
+
+            return allowed && searchable.includes(term);
+        });
+
+        selectedIndex = visibleItems.length ? 0 : -1;
+
+        if(!visibleItems.length){
+            results.innerHTML = `
+                <div class="search-empty">
+                    Nenhum resultado encontrado.
+                </div>
+            `;
+            results.classList.add("active");
+            return;
+        }
+
+        results.innerHTML = visibleItems.map((item, index)=>`
+            <button
+                type="button"
+                class="search-result-item ${index === selectedIndex ? "selected" : ""}"
+                data-search-index="${index}"
+            >
+                <i class="fa-solid ${item.icon}"></i>
+
+                <span class="search-result-copy">
+                    <strong>${escapeHtml(item.title)}</strong>
+                    <small>${escapeHtml(item.description)}</small>
+                </span>
+            </button>
+        `).join("");
+
+        results.classList.add("active");
+
+        results.querySelectorAll(".search-result-item").forEach(button=>{
+            button.addEventListener("click", ()=>{
+                openPage(Number(button.dataset.searchIndex));
+            });
+        });
+    }
+
+    input.addEventListener("input", renderResults);
+
+    input.addEventListener("focus", ()=>{
+        if(input.value.trim()){
+            renderResults();
+        }
+    });
+
+    input.addEventListener("keydown", event=>{
+        if(!results.classList.contains("active")){
+            if(event.key === "Enter"){
+                renderResults();
+            }
+            return;
+        }
+
+        if(event.key === "ArrowDown"){
+            event.preventDefault();
+
+            if(visibleItems.length){
+                selectedIndex = (selectedIndex + 1) % visibleItems.length;
+                updateSelection();
+            }
+        }
+
+        if(event.key === "ArrowUp"){
+            event.preventDefault();
+
+            if(visibleItems.length){
+                selectedIndex =
+                    (selectedIndex - 1 + visibleItems.length) %
+                    visibleItems.length;
+
+                updateSelection();
+            }
+        }
+
+        if(event.key === "Enter"){
+            event.preventDefault();
+
+            if(selectedIndex >= 0){
+                openPage(selectedIndex);
+            }
+        }
+
+        if(event.key === "Escape"){
+            closeResults();
+        }
+    });
+
+    document.addEventListener("click", event=>{
+        if(!wrapper.contains(event.target)){
+            closeResults();
+        }
+    });
+}
+
+
 document.addEventListener("DOMContentLoaded",()=>{
     if(!window.location.pathname.endsWith("login.html")){
         const session=getSession();
@@ -320,6 +585,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 
         createUserChip(getProfile());
         configureNotifications();
+        configureGlobalSearch();
     }
 
     const currentPage=document.body.dataset.page;
