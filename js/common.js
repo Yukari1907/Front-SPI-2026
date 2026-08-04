@@ -246,7 +246,7 @@ function createUserChip(profile){
         <button id="userChipButton" type="button">
             <span class="avatar">${initials(profile.name)}</span>
 
-            <span>
+            <span class="user-copy">
                 <strong>${escapeHtml(profile.name)}</strong><br>
                 <small>${escapeHtml(profile.role)}</small>
             </span>

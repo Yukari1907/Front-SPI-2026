@@ -754,8 +754,6 @@ tbody tr:hover{background:var(--table-hover)}
 .user-chip > button > span:not(.avatar){
     min-width:0;
     flex:1;
-    text-align:left;
-    line-height:1.2;
 }
 
 .user-chip > button strong,
@@ -934,6 +932,106 @@ tbody tr:hover{background:var(--table-hover)}
 
     font-size:12px;
 
+}
+
+/* =========================================================
+   CORREÇÃO FINAL DO PERFIL DA TOPBAR
+========================================================= */
+
+.user-chip{
+    flex:0 0 auto;
+}
+
+.user-chip > button{
+    width:auto;
+    min-width:220px;
+    min-height:62px;
+
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+
+    gap:12px;
+
+    padding:7px 16px 7px 8px;
+
+    border-radius:999px;
+}
+
+.user-chip > button .avatar{
+    width:46px;
+    height:46px;
+
+    flex:0 0 46px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    margin:0;
+
+    font-size:18px;
+    line-height:1;
+}
+
+.user-chip > button .user-copy{
+    min-width:0;
+    flex:1;
+
+    display:flex !important;
+    flex-direction:column;
+    align-items:flex-start;
+    justify-content:center;
+
+    gap:2px;
+
+    margin:0;
+    padding:0;
+
+    text-align:left;
+    line-height:1;
+}
+
+.user-chip > button .user-copy strong{
+    display:block;
+
+    margin:0;
+    padding:0;
+
+    font-size:15px;
+    font-weight:700;
+    line-height:1.2;
+
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.user-chip > button .user-copy small{
+    display:block;
+
+    margin:0;
+    padding:0;
+
+    color:var(--muted);
+
+    font-size:12px;
+    line-height:1.2;
+
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+
+.user-chip > button > i{
+    flex:0 0 auto;
+    margin-left:auto;
+    font-size:16px;
+}
+
+/* Impede um BR antigo de criar espaçamento */
+.user-chip > button br{
+    display:none !important;
 }
 
 .worker-modal-box{width:min(720px,96vw)}
