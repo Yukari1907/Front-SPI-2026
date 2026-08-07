@@ -63,14 +63,6 @@ A versão atualizada registra automaticamente:
 
 Na tabela **Usuários e Permissões**, clique no ícone de olho para consultar o histórico.
 
-
-## Correção do cadastro de usuários
-
-O botão **Novo usuário** foi corrigido. O problema era um conflito entre constantes
-globais declaradas em `common.js` e `administracao.js`, que interrompia a execução
-do JavaScript da página de Administração.
-
-
 ## Perfis e permissões
 
 ### Administrador
