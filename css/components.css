@@ -725,11 +725,6 @@ tbody tr:hover{background:var(--table-hover)}
     .notification-panel{position:fixed;left:12px;right:12px;top:70px;width:auto}
 }
 
-
-/* =========================================================
-   AJUSTES DA TOPBAR, PERFIL E PESQUISA GLOBAL
-========================================================= */
-
 .topbar{
     align-items:flex-start;
 }
@@ -897,10 +892,6 @@ tbody tr:hover{background:var(--table-hover)}
     }
 }
 
-/*==================================================
-      AJUSTE DO PERFIL DA TOPBAR
-==================================================*/
-
 .user-copy{
 
     display:flex;
@@ -933,10 +924,6 @@ tbody tr:hover{background:var(--table-hover)}
     font-size:12px;
 
 }
-
-/* =========================================================
-   CORREÇÃO FINAL DO PERFIL DA TOPBAR
-========================================================= */
 
 .user-chip{
     flex:0 0 auto;
@@ -1029,7 +1016,6 @@ tbody tr:hover{background:var(--table-hover)}
     font-size:16px;
 }
 
-/* Impede um BR antigo de criar espaçamento */
 .user-chip > button br{
     display:none !important;
 }

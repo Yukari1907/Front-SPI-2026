@@ -4,10 +4,6 @@
 const SESSION_KEY="visaoepi_session";
 const PROFILE_KEY="visaoepi_profile";
 
-/* =========================================================
-   PERMISSÕES POR PERFIL
-========================================================= */
-
 const ROLE_PERMISSIONS={
     "Administrador":{
         pages:[
@@ -302,11 +298,6 @@ function configureNotifications(){
 
     document.addEventListener("click",()=>panel.classList.remove("active"));
 }
-
-
-/* =========================================================
-   PESQUISA GLOBAL
-========================================================= */
 
 const GLOBAL_SEARCH_ITEMS = [
     {
