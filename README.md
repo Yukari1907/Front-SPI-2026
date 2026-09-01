@@ -10,7 +10,20 @@
 
 ## Login
 
+Adminsitrador
 - E-mail: `admin@visaoepi.com`
+- Senha: `123456`
+
+Supervisor
+- E-mail: `ana@empresa.com`
+- Senha: `123456`
+
+Operador
+- E-mail: `carlos@empresa.com`
+- Senha: `123456`
+
+Tecnico de Segurança
+- E-mail: `mariana@empresa.com`
 - Senha: `123456`
 
 ## Páginas
