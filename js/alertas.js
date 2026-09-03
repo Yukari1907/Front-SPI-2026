@@ -1,90 +1,105 @@
 
 "use strict";
 
-const ALERTS_KEY = "visaoepi_alerts";
+/**
+ * alertas.js — Gerenciamento de alertas via API real do backend.
+ *
+ * API utilizada:
+ *   GET  /alertas              → listar todos
+ *   GET  /alertas/<id>         → obter alerta específico
+ *   PUT  /alertas/<id>/resolvido → marcar como resolvido
+ *   DELETE /alertas/<id>       → excluir alerta
+ *
+ * Nota: O backend retorna campos estruturais (id_camera, id_zona, id_epi, evento).
+ * Os campos de exibição do frontend (sector, worker, severity, description, action)
+ * não existem no banco — são exibidos com valores padrão quando ausentes.
+ */
 
-const DEFAULT_ALERTS = [
-    {
-        id: 1,
-        dateTime: "2026-07-27T14:32:00",
-        sector: "Prensa",
-        camera: "Câmera 03",
-        event: "Sem capacete",
-        severity: "Crítico",
-        status: "Pendente",
-        worker: "MAT-1024",
-        description:
-            "O sistema identificou um trabalhador na área da prensa sem capacete de segurança.",
-        action: "Interromper a atividade e orientar o colaborador."
-    },
-    {
-        id: 2,
-        dateTime: "2026-07-27T14:20:00",
-        sector: "Expedição",
-        camera: "Câmera 07",
-        event: "Sem óculos",
-        severity: "Médio",
-        status: "Em análise",
-        worker: "MAT-1048",
-        description:
-            "Óculos de proteção não identificado durante a movimentação de materiais.",
-        action: "Confirmar a ocorrência e verificar o equipamento entregue."
-    },
-    {
-        id: 3,
-        dateTime: "2026-07-27T13:50:00",
-        sector: "Estoque",
-        camera: "Câmera 01",
-        event: "Área restrita",
-        severity: "Crítico",
-        status: "Pendente",
-        worker: "MAT-1059",
-        description:
-            "Pessoa detectada dentro de uma área restrita sem autorização registrada.",
-        action: "Acionar o supervisor e retirar a pessoa da área."
-    },
-    {
-        id: 4,
-        dateTime: "2026-07-27T12:40:00",
-        sector: "Produção",
-        camera: "Câmera 04",
-        event: "Sem luvas",
-        severity: "Baixo",
-        status: "Resolvido",
-        worker: "MAT-1072",
-        description:
-            "Luvas não identificadas durante uma atividade de baixo risco.",
-        action: "Ocorrência revisada e colaborador orientado."
-    }
-];
-
-let alerts = loadAlerts();
+let alerts = [];
 let currentAlertId = null;
 
 const $ = id => document.getElementById(id);
 
-function loadAlerts() {
-    const stored = JSON.parse(localStorage.getItem(ALERTS_KEY) || "null");
+// ─────────────────────────────────────────────
+// Mapeamento de campos backend → frontend
+// ─────────────────────────────────────────────
 
-    if (!Array.isArray(stored) || stored.length === 0) {
-        localStorage.setItem(ALERTS_KEY, JSON.stringify(DEFAULT_ALERTS));
-        return [...DEFAULT_ALERTS];
+function fromApiAlerta(apiAlerta) {
+    return {
+        id: apiAlerta.id,
+        // Campos diretos do backend
+        event: apiAlerta.evento || "Evento não especificado",
+        dateTime: apiAlerta.data || new Date().toISOString(),
+        resolvido: apiAlerta.resolvido,
+        id_camera: apiAlerta.id_camera,
+        id_zona: apiAlerta.id_zona,
+        id_epi: apiAlerta.id_epi,
+        id_monitorar: apiAlerta.id_monitorar,
+        // Campos derivados/inferidos (backend não os retorna diretamente)
+        sector: apiAlerta.id_zona ? `Zona ${apiAlerta.id_zona}` : "Não especificado",
+        camera: apiAlerta.id_camera ? `Câmera ${apiAlerta.id_camera}` : "Não especificada",
+        worker: apiAlerta.id_usuario ? `Usuário ${apiAlerta.id_usuario}` : "Não identificado",
+        // Severidade inferida a partir do evento
+        severity: inferSeverity(apiAlerta.evento),
+        status: apiAlerta.resolvido ? "Resolvido" : "Pendente",
+        description: `Alerta detectado: ${apiAlerta.evento || "evento não especificado"}.`,
+        action: apiAlerta.resolvido
+            ? "Ocorrência revisada e marcada como resolvida no sistema."
+            : "Verifique o evento e tome as medidas necessárias."
+    };
+}
+
+/**
+ * Infere severidade com base nas palavras-chave do evento.
+ * O backend não tem campo de severidade — inferimos a partir do texto.
+ */
+function inferSeverity(evento) {
+    if (!evento) return "Médio";
+    const ev = evento.toLowerCase();
+    if (ev.includes("capacete") || ev.includes("restrita") || ev.includes("incêndio")) return "Crítico";
+    if (ev.includes("luva") || ev.includes("bota") || ev.includes("colete")) return "Médio";
+    return "Baixo";
+}
+
+// ─────────────────────────────────────────────
+// Carregar dados do backend
+// ─────────────────────────────────────────────
+
+async function loadAlertsFromApi() {
+    try {
+        const result = await apiGet("/alertas");
+
+        if (result.status === 0) {
+            showToast("Backend indisponível. Sem dados de alertas.", "warning");
+            renderAlerts();
+            return;
+        }
+
+        if (result.ok && Array.isArray(result.data)) {
+            alerts = result.data.map(fromApiAlerta);
+        } else if (result.status === 404) {
+            // Backend retorna 404 quando não há alertas
+            alerts = [];
+        } else {
+            showToast("Não foi possível carregar os alertas.", "danger");
+            alerts = [];
+        }
+
+        renderAlerts();
+    } catch (e) {
+        console.error("[Alertas] Erro ao carregar alertas:", e);
+        alerts = [];
+        renderAlerts();
     }
-
-    return stored;
 }
 
-function saveAlerts() {
-    localStorage.setItem(ALERTS_KEY, JSON.stringify(alerts));
-}
+// ─────────────────────────────────────────────
+// Renderização
+// ─────────────────────────────────────────────
 
 function formatDateTime(value) {
     const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return value;
-    }
-
+    if (Number.isNaN(date.getTime())) return value;
     return new Intl.DateTimeFormat("pt-BR", {
         dateStyle: "short",
         timeStyle: "short"
@@ -106,10 +121,7 @@ function normalizeFilterText(value) {
 }
 
 function getFilteredAlerts() {
-    const searchTerm = normalizeFilterText(
-        $("alertSearch")?.value
-    );
-
+    const searchTerm = normalizeFilterText($("alertSearch")?.value);
     const severity = $("alertSeverity")?.value || "";
     const status = $("alertStatus")?.value || "";
 
@@ -119,18 +131,12 @@ function getFilteredAlerts() {
             alert.sector,
             alert.camera,
             alert.worker,
-            alert.description,
-            alert.action
+            alert.description
         ].join(" "));
 
-        const matchesSearch =
-            !searchTerm || searchableText.includes(searchTerm);
-
-        const matchesSeverity =
-            !severity || alert.severity === severity;
-
-        const matchesStatus =
-            !status || alert.status === status;
+        const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
+        const matchesSeverity = !severity || alert.severity === severity;
+        const matchesStatus = !status || alert.status === status;
 
         return matchesSearch && matchesSeverity && matchesStatus;
     });
@@ -147,42 +153,43 @@ function renderAlerts() {
                 </td>
             </tr>
         `;
-
         return;
     }
 
     $("alertsTable").innerHTML = filteredAlerts
-        .map(
-            alert => `
-                <tr>
-                    <td>${formatDateTime(alert.dateTime)}</td>
-                    <td>${escapeHtml(alert.sector)}</td>
-                    <td>${escapeHtml(alert.event)}</td>
+        .map(alert => `
+            <tr>
+                <td>${formatDateTime(alert.dateTime)}</td>
+                <td>${escapeHtml(alert.sector)}</td>
+                <td>${escapeHtml(alert.event)}</td>
 
-                    <td>
-                        <span class="badge ${severityClass(alert.severity)}">
-                            ${escapeHtml(alert.severity)}
-                        </span>
-                    </td>
+                <td>
+                    <span class="badge ${severityClass(alert.severity)}">
+                        ${escapeHtml(alert.severity)}
+                    </span>
+                </td>
 
-                    <td>${escapeHtml(alert.status)}</td>
+                <td>${escapeHtml(alert.status)}</td>
 
-                    <td>
-                        <button
-                            class="icon-btn"
-                            type="button"
-                            onclick="viewAlert(${alert.id})"
-                            title="Visualizar alerta"
-                            aria-label="Visualizar alerta"
-                        >
-                            <i class="fa-solid fa-eye"></i>
-                        </button>
-                    </td>
-                </tr>
-            `
-        )
+                <td>
+                    <button
+                        class="icon-btn"
+                        type="button"
+                        onclick="viewAlert(${alert.id})"
+                        title="Visualizar alerta"
+                        aria-label="Visualizar alerta"
+                    >
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </td>
+            </tr>
+        `)
         .join("");
 }
+
+// ─────────────────────────────────────────────
+// Modal de detalhes
+// ─────────────────────────────────────────────
 
 function viewAlert(id) {
     const alert = alerts.find(item => item.id === id);
@@ -205,7 +212,6 @@ function viewAlert(id) {
     $("alertDetailAction").textContent = alert.action;
 
     const resolveButton = $("resolveAlertButton");
-
     if (resolveButton) {
         const canManage =
             typeof canPerform === "function" &&
@@ -225,50 +231,55 @@ function closeAlertModal() {
     currentAlertId = null;
 }
 
-function resolveCurrentAlert() {
+async function resolveCurrentAlert() {
     if (
         typeof canPerform !== "function" ||
         !canPerform("alerts:manage")
     ) {
-        showToast(
-            "Seu perfil não possui permissão para resolver alertas.",
-            "danger"
-        );
+        showToast("Seu perfil não possui permissão para resolver alertas.", "danger");
         return;
     }
 
-    const alert = alerts.find(item => item.id === currentAlertId);
+    if (!currentAlertId) return;
 
-    if (!alert) {
+    const result = await apiPut(`/alertas/${currentAlertId}/resolvido`);
+
+    if (result.status === 0) {
+        showToast("Backend indisponível.", "warning");
         return;
     }
 
-    alert.status = "Resolvido";
-    alert.action =
-        "Ocorrência revisada e marcada como resolvida no sistema.";
+    if (result.ok) {
+        // Atualiza o estado local do alerta
+        const alert = alerts.find(item => item.id === currentAlertId);
+        if (alert) {
+            alert.status = "Resolvido";
+            alert.resolvido = true;
+            alert.action = "Ocorrência revisada e marcada como resolvida no sistema.";
+        }
 
-    saveAlerts();
-    renderAlerts();
-    closeAlertModal();
-    showToast("Alerta marcado como resolvido.");
+        renderAlerts();
+        closeAlertModal();
+        showToast("Alerta marcado como resolvido.");
+    } else {
+        showToast(result.data?.message || "Falha ao resolver alerta.", "danger");
+    }
 }
 
+// ─────────────────────────────────────────────
+// Inicialização
+// ─────────────────────────────────────────────
+
 document.addEventListener("DOMContentLoaded", () => {
-    renderAlerts();
+    // Carrega dados reais do backend
+    loadAlertsFromApi();
 
     $("alertSearch")?.addEventListener("input", renderAlerts);
     $("alertSeverity")?.addEventListener("change", renderAlerts);
     $("alertStatus")?.addEventListener("change", renderAlerts);
 
-    $("closeAlertDetailsModal").addEventListener(
-        "click",
-        closeAlertModal
-    );
-
-    $("closeAlertDetailsFooter").addEventListener(
-        "click",
-        closeAlertModal
-    );
+    $("closeAlertDetailsModal").addEventListener("click", closeAlertModal);
+    $("closeAlertDetailsFooter").addEventListener("click", closeAlertModal);
 
     $("alertDetailsModal").addEventListener("click", event => {
         if (event.target === $("alertDetailsModal")) {
@@ -276,10 +287,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    $("resolveAlertButton").addEventListener(
-        "click",
-        resolveCurrentAlert
-    );
+    $("resolveAlertButton").addEventListener("click", resolveCurrentAlert);
 });
 
 window.viewAlert = viewAlert;

@@ -4,6 +4,13 @@
 const ADMIN_USERS_KEY = "visaoepi_users";
 const ADMIN_SESSION_KEY = "visaoepi_session";
 
+/**
+ * NOTA DE INTEGRAÇÃO:
+ * O backend possui apenas POST /signup para criar usuários.
+ * Não há endpoints para: listar, editar, bloquear ou excluir usuários.
+ * As operações que não possuem endpoint correspondente continuam
+ * utilizando o estado local (localStorage) como demonstração.
+ */
 const DEFAULT_USERS = [
     {
         id: 1,
@@ -12,7 +19,6 @@ const DEFAULT_USERS = [
         role: "Administrador",
         unit: "Matriz",
         status: "Ativo",
-        password: "123456",
         lastAccess: null,
         accessCount: 0,
         loginHistory: [],
@@ -26,7 +32,6 @@ const DEFAULT_USERS = [
         role: "Supervisor",
         unit: "Matriz",
         status: "Ativo",
-        password: "123456",
         lastAccess: null,
         accessCount: 0,
         loginHistory: [],
@@ -40,7 +45,6 @@ const DEFAULT_USERS = [
         role: "Operador",
         unit: "Unidade Industrial 1",
         status: "Ativo",
-        password: "123456",
         lastAccess: null,
         accessCount: 0,
         loginHistory: [],
@@ -54,7 +58,6 @@ const DEFAULT_USERS = [
         role: "Técnico de Segurança",
         unit: "Matriz",
         status: "Bloqueado",
-        password: "123456",
         lastAccess: null,
         accessCount: 0,
         loginHistory: [],
@@ -455,7 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    $("userForm").addEventListener("submit", event => {
+    $("userForm").addEventListener("submit", async event => {
         event.preventDefault();
 
         const data = Object.fromEntries(
@@ -505,53 +508,95 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const session = getCurrentSession();
 
-        const user = {
-            id: existingId || Date.now(),
-            name: data.name.trim(),
-            email,
-            role: data.role,
-            unit: data.unit,
-            password:
-                data.password ||
-                currentUser?.password ||
-                "123456",
-            status: data.status,
-            lastAccess: currentUser?.lastAccess || null,
-            accessCount:
-                Number(currentUser?.accessCount) || 0,
-            loginHistory: Array.isArray(
-                currentUser?.loginHistory
-            )
-                ? currentUser.loginHistory
-                : [],
-            createdAt:
-                currentUser?.createdAt ||
-                new Date().toISOString(),
-            createdBy:
-                currentUser?.createdBy ||
-                session?.name ||
-                "Administrador"
-        };
+        // ─────────────────────────────────────────────────────────
+        // INTEGRAÇÃO: POST /signup para novo usuário
+        // Edição permanece em mock (sem endpoint no backend)
+        // ─────────────────────────────────────────────────────────
+        if (!existingId) {
+            // NOVO USUÁRIO → usa API real
+            const submitBtn = $("userForm").querySelector('[type="submit"]');
+            if (submitBtn) submitBtn.disabled = true;
 
-        const index = users.findIndex(
-            item => item.id === user.id
-        );
+            try {
+                const [nome, ...sobrenomePartes] = data.name.trim().split(" ");
+                const sobrenome = sobrenomePartes.join(" ") || null;
 
-        if (index >= 0) {
-            users[index] = user;
+                const result = await apiPost("/signup", {
+                    email,
+                    password: data.password,
+                    nome,
+                    sobrenome,
+                    perfil: data.role,
+                    unidade: data.unit || null
+                });
+
+                if (result.status === 0) {
+                    showToast("Backend indisponível. Usuário não cadastrado.", "danger");
+                    return;
+                }
+
+                if (result.ok) {
+                    // Adiciona ao estado local para refletir na tabela imediatamente
+                    const novoUsuario = {
+                        id: Date.now(),
+                        name: data.name.trim(),
+                        email,
+                        role: data.role,
+                        unit: data.unit,
+                        status: "Ativo",
+                        lastAccess: null,
+                        accessCount: 0,
+                        loginHistory: [],
+                        createdAt: new Date().toISOString(),
+                        createdBy: session?.name || "Administrador"
+                    };
+
+                    users.unshift(novoUsuario);
+                    saveUsers();
+                    renderUsers();
+                    closeUserModal();
+                    showToast("Usuário cadastrado com sucesso.");
+                } else if (result.status === 400 && result.data?.message?.includes("Email already exists")) {
+                    showToast("E-mail já cadastrado no sistema.", "danger");
+                } else {
+                    showToast(result.data?.message || "Falha ao cadastrar usuário.", "danger");
+                }
+            } catch (e) {
+                console.error("[Admin] Erro ao cadastrar usuário:", e);
+                showToast("Erro inesperado ao cadastrar usuário.", "danger");
+            } finally {
+                if (submitBtn) submitBtn.disabled = false;
+            }
+
         } else {
-            users.unshift(user);
+            // EDIÇÃO → sem endpoint no backend, operação local
+            const user = {
+                id: existingId,
+                name: data.name.trim(),
+                email,
+                role: data.role,
+                unit: data.unit,
+                status: data.status,
+                lastAccess: currentUser?.lastAccess || null,
+                accessCount: Number(currentUser?.accessCount) || 0,
+                loginHistory: Array.isArray(currentUser?.loginHistory)
+                    ? currentUser.loginHistory
+                    : [],
+                createdAt: currentUser?.createdAt || new Date().toISOString(),
+                createdBy: currentUser?.createdBy || session?.name || "Administrador"
+            };
+
+            const index = users.findIndex(item => item.id === user.id);
+
+            if (index >= 0) {
+                users[index] = user;
+            }
+
+            saveUsers();
+            renderUsers();
+            closeUserModal();
+            showToast("Usuário atualizado. (Operação local — sem API de edição)");
         }
-
-        saveUsers();
-        renderUsers();
-        closeUserModal();
-
-        showToast(
-            index >= 0
-                ? "Usuário atualizado."
-                : "Usuário cadastrado."
-        );
     });
 
     renderUsers();

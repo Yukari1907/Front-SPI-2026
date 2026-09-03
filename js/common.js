@@ -140,10 +140,20 @@ function initials(name){
         .join("");
 }
 
-function logout(){
-    localStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(SESSION_KEY);
-    window.location.href="login.html";
+async function logout(){
+    try {
+        // Encerra a sessão no backend antes de limpar o storage local
+        if (typeof apiPost === "function") {
+            await apiPost("/logout", {});
+        }
+    } catch(e) {
+        // Mesmo com falha no backend, o logout local é executado
+        console.warn("[Logout] Falha ao comunicar com o backend:", e);
+    } finally {
+        localStorage.removeItem(SESSION_KEY);
+        sessionStorage.removeItem(SESSION_KEY);
+        window.location.href="login.html";
+    }
 }
 
 function showToast(message,type="success"){
@@ -559,18 +569,63 @@ function configureGlobalSearch(){
 }
 
 
-document.addEventListener("DOMContentLoaded",()=>{
-    if(!window.location.pathname.endsWith("login.html")){
-        const session=getSession();
+document.addEventListener("DOMContentLoaded", async () => {
+    if (!window.location.pathname.endsWith("login.html")) {
+        const localSession = getSession();
 
-        if(!session?.authenticated){
-            window.location.href="login.html";
+        // Verificação rápida local — se não há sessão local, redireciona imediatamente
+        if (!localSession?.authenticated) {
+            window.location.href = "login.html";
             return;
         }
 
-        const allowed=applyRolePermissions();
+        // Validação da sessão no backend (GET /session)
+        // Sincroniza dados do perfil e confirma que o cookie ainda é válido
+        if (typeof apiGet === "function") {
+            try {
+                const result = await apiGet("/session");
 
-        if(!allowed){
+                if (!result.ok || result.status === 401) {
+                    // Sessão expirada no servidor
+                    localStorage.removeItem(SESSION_KEY);
+                    sessionStorage.removeItem(SESSION_KEY);
+                    window.location.href = "login.html";
+                    return;
+                }
+
+                // Sincroniza dados do perfil com os dados reais do servidor
+                if (result.data?.user) {
+                    const serverUser = result.data.user;
+                    const currentProfile = getProfile();
+                    const updatedProfile = {
+                        ...currentProfile,
+                        name: [serverUser.nome, serverUser.sobrenome].filter(Boolean).join(" ") || currentProfile.name,
+                        email: serverUser.email || currentProfile.email,
+                        role: serverUser.perfil || currentProfile.role,
+                        unit: serverUser.unidade || currentProfile.unit
+                    };
+                    localStorage.setItem(PROFILE_KEY, JSON.stringify(updatedProfile));
+
+                    // Atualiza sessão local com dados atualizados
+                    const updatedSession = {
+                        ...localSession,
+                        name: updatedProfile.name,
+                        email: updatedProfile.email,
+                        role: updatedProfile.role,
+                        unit: updatedProfile.unit
+                    };
+                    const storage = localStorage.getItem(SESSION_KEY) ? localStorage : sessionStorage;
+                    storage.setItem(SESSION_KEY, JSON.stringify(updatedSession));
+                }
+            } catch (e) {
+                // Falha de rede: mantém a sessão local sem redirecionar
+                console.warn("[Session] Não foi possível validar sessão no servidor:", e);
+            }
+        }
+
+        const allowed = applyRolePermissions();
+
+        if (!allowed) {
             return;
         }
 
@@ -579,10 +634,10 @@ document.addEventListener("DOMContentLoaded",()=>{
         configureGlobalSearch();
     }
 
-    const currentPage=document.body.dataset.page;
+    const currentPage = document.body.dataset.page;
 
-    document.querySelectorAll(".nav a[data-page]").forEach(link=>{
-        link.classList.toggle("active",link.dataset.page===currentPage);
+    document.querySelectorAll(".nav a[data-page]").forEach(link => {
+        link.classList.toggle("active", link.dataset.page === currentPage);
     });
 });
 
