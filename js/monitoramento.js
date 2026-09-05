@@ -5,11 +5,25 @@
  * monitoramento.js — Monitoramento de câmeras via API real do backend.
  *
  * API utilizada:
- *   GET /cameras   → listar câmeras
- *   GET /setores   → listar setores (para exibir nome do setor)
- *   GET /video/<id> → stream MJPEG da câmera
- *   GET /detections → últimas detecções (polling)
+ *   GET /cameras            → listar câmeras (cache curto, ver api.js:apiGetCached)
+ *   GET /setores            → listar setores (idem)
+ *   GET /video/<id>         → stream MJPEG da câmera selecionada
+ *   GET /detections/<id>    → últimas detecções da câmera selecionada (polling)
+ *
+ * Seletor de câmera: a tela mostra uma câmera por vez (não múltiplas
+ * simultâneas), escolhida pelo <select> ou clicando na lista de câmeras.
+ *
+ * Nota sobre o WebSocket (ver CONTRATO_INTEGRACAO.md): o evento "novo_alerta"
+ * cobre alertas (violações), não as detecções contínuas do YOLO — por isso
+ * /detections continua em polling aqui, mesmo com o WS de alertas já ativo
+ * (ligado globalmente em common.js/notifications.js para o painel de
+ * notificações). Ver RELATORIO_IMPLEMENTACAO_FRONTEND.md para o porquê.
  */
+
+const CAMERAS_SETORES_CACHE_TTL_MS = 45000;
+
+let monitoramentoCameras = [];
+let currentCameraId = null;
 
 // ─────────────────────────────────────────────
 // Carregar câmeras e setores
@@ -22,10 +36,10 @@ async function loadMonitoramento() {
     cameraList.innerHTML = '<div style="padding:16px;color:var(--text-muted)">Carregando câmeras...</div>';
 
     try {
-        // Carrega câmeras e setores em paralelo
+        // Carrega câmeras e setores em paralelo (cache curto)
         const [camerasResult, setoresResult] = await Promise.all([
-            apiGet("/cameras"),
-            apiGet("/setores")
+            apiGetCached("/cameras", CAMERAS_SETORES_CACHE_TTL_MS),
+            apiGetCached("/setores", CAMERAS_SETORES_CACHE_TTL_MS)
         ]);
 
         // Monta dicionário de setores: id → nome
@@ -48,36 +62,97 @@ async function loadMonitoramento() {
 
         if (!camerasResult.ok || !Array.isArray(camerasResult.data) || camerasResult.data.length === 0) {
             cameraList.innerHTML = '<div style="padding:16px;color:var(--text-muted)">Nenhuma câmera cadastrada.</div>';
+            document.getElementById("cameraSelect").innerHTML = "";
             return;
         }
 
-        const cameras = camerasResult.data;
+        monitoramentoCameras = camerasResult.data;
 
-        cameraList.innerHTML = cameras.map(camera => {
-            const setorNome = setoresMap[camera.id_setor] || `Setor ${camera.id_setor}`;
-            return `
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
-                    <span>
-                        <i class="fa-solid fa-video"></i>
-                        Câmera ${camera.id}<br>
-                        <small class="text-muted">${escapeHtml(camera.ip)} — ${escapeHtml(setorNome)}</small>
-                    </span>
+        renderCameraList(setoresMap);
+        renderCameraSelect(setoresMap);
 
-                    <span class="badge success">Online</span>
-                </div>
-            `;
-        }).join("");
-
-        // Renderiza o stream de vídeo da primeira câmera disponível
-        renderVideoStream(cameras[0].id);
-
-        // Inicia polling de detecções
-        startDetectionsPolling();
+        // Seleciona a primeira câmera por padrão
+        selectCamera(monitoramentoCameras[0].id);
 
     } catch (e) {
         console.error("[Monitoramento] Erro ao carregar câmeras:", e);
         cameraList.innerHTML = '<div style="padding:16px;color:var(--danger)">Erro ao carregar câmeras.</div>';
     }
+}
+
+function renderCameraList(setoresMap) {
+    const cameraList = document.getElementById("cameraList");
+    if (!cameraList) return;
+
+    cameraList.innerHTML = monitoramentoCameras.map(camera => {
+        const setorNome = setoresMap[camera.id_setor] || `Setor ${camera.id_setor}`;
+        const selected = camera.id === currentCameraId;
+        return `
+            <button
+                type="button"
+                class="camera-list-item"
+                data-camera-id="${camera.id}"
+                style="
+                    display:flex;justify-content:space-between;align-items:center;
+                    width:100%;text-align:left;border:none;background:${selected ? "var(--primary-soft)" : "transparent"};
+                    padding:12px;border-radius:8px;border-bottom:1px solid var(--border);cursor:pointer;
+                "
+            >
+                <span>
+                    <i class="fa-solid fa-video"></i>
+                    Câmera ${camera.id}<br>
+                    <small class="text-muted">${escapeHtml(camera.ip)} — ${escapeHtml(setorNome)}</small>
+                </span>
+
+                <span class="badge success">Online</span>
+            </button>
+        `;
+    }).join("");
+
+    cameraList.querySelectorAll(".camera-list-item").forEach(button => {
+        button.addEventListener("click", () => {
+            selectCamera(Number(button.dataset.cameraId));
+        });
+    });
+}
+
+function renderCameraSelect(setoresMap) {
+    const select = document.getElementById("cameraSelect");
+    if (!select) return;
+
+    select.innerHTML = monitoramentoCameras.map(camera => {
+        const setorNome = setoresMap[camera.id_setor] || `Setor ${camera.id_setor}`;
+        return `<option value="${camera.id}">Câmera ${camera.id} — ${escapeHtml(setorNome)}</option>`;
+    }).join("");
+
+    select.addEventListener("change", () => {
+        selectCamera(Number(select.value));
+    });
+}
+
+function selectCamera(cameraId) {
+    if (!cameraId || cameraId === currentCameraId) {
+        currentCameraId = cameraId;
+        return;
+    }
+
+    currentCameraId = cameraId;
+
+    const select = document.getElementById("cameraSelect");
+    if (select) select.value = String(cameraId);
+
+    renderCameraListSelection();
+    renderVideoStream(cameraId);
+
+    stopDetectionsPolling();
+    startDetectionsPolling(cameraId);
+}
+
+function renderCameraListSelection() {
+    document.querySelectorAll(".camera-list-item").forEach(button => {
+        const isSelected = Number(button.dataset.cameraId) === currentCameraId;
+        button.style.background = isSelected ? "var(--primary-soft)" : "transparent";
+    });
 }
 
 // ─────────────────────────────────────────────
@@ -129,44 +204,51 @@ function handleStreamError(img) {
 }
 
 // ─────────────────────────────────────────────
-// Polling de detecções
+// Polling de detecções (por câmera selecionada)
 // ─────────────────────────────────────────────
 
 let detectionsInterval = null;
+let detectionsCameraId = null;
 
-async function fetchDetections() {
+async function fetchDetections(cameraId) {
     const container = document.getElementById("detectionsContainer");
     if (!container) return;
 
     try {
-        const result = await apiGet("/detections");
+        const result = await apiGet(`/detections/${cameraId}`);
 
         if (result.ok && Array.isArray(result.data) && result.data.length > 0) {
             container.innerHTML = result.data.map(det => `
                 <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:0.875rem;">
-                    <strong>${escapeHtml(String(det.class_name || det.label || "Detecção"))}</strong>
+                    <strong>${escapeHtml(String(det.label || det.class_name || "Detecção"))}</strong>
                     ${det.confidence ? `<span class="text-muted"> — confiança: ${(det.confidence * 100).toFixed(1)}%</span>` : ""}
                 </div>
             `).join("");
         } else if (result.status === 0) {
             // Backend offline — para o polling
             stopDetectionsPolling();
+        } else {
+            container.innerHTML = '<div style="padding:12px 0;color:var(--text-muted)">Nenhuma detecção recente.</div>';
         }
     } catch (e) {
         // Silencioso — detecções são secundárias
     }
 }
 
-function startDetectionsPolling() {
-    if (detectionsInterval) return;
-    fetchDetections(); // Imediato
-    detectionsInterval = setInterval(fetchDetections, 3000); // A cada 3s
+function startDetectionsPolling(cameraId) {
+    if (detectionsInterval && detectionsCameraId === cameraId) return;
+
+    stopDetectionsPolling();
+    detectionsCameraId = cameraId;
+    fetchDetections(cameraId); // Imediato
+    detectionsInterval = setInterval(() => fetchDetections(cameraId), 3000); // A cada 3s
 }
 
 function stopDetectionsPolling() {
     if (detectionsInterval) {
         clearInterval(detectionsInterval);
         detectionsInterval = null;
+        detectionsCameraId = null;
     }
 }
 

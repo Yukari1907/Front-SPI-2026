@@ -10,6 +10,8 @@
     
 
     <script src="js/api.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="js/notifications.js"></script>
     <script src="js/theme.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/common.js" defer></script>
@@ -38,29 +40,13 @@
             <i class="fa-solid fa-bell"></i>
         </button>
 
-        <span class="notification-count">4</span>
+        <span class="notification-count" id="notificationCount">0</span>
 
         <div class="notification-panel" id="notificationPanel">
             <div class="section-title"><h3>Notificações</h3></div>
 
-            <div class="notification-item">
-                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
-                <div><strong>Estoque crítico</strong><p class="text-muted">Botina Nobuck com 5 unidades.</p></div>
-            </div>
-
-            <div class="notification-item">
-                <i class="fa-solid fa-video" style="color:var(--warning)"></i>
-                <div><strong>Câmera offline</strong><p class="text-muted">Câmera 03 perdeu conexão.</p></div>
-            </div>
-
-            <div class="notification-item">
-                <i class="fa-solid fa-calendar-days" style="color:var(--warning)"></i>
-                <div><strong>Validade próxima</strong><p class="text-muted">2 EPIs vencem em até 30 dias.</p></div>
-            </div>
-
-            <div class="notification-item">
-                <i class="fa-solid fa-shield-halved" style="color:var(--success)"></i>
-                <div><strong>Conformidade alta</strong><p class="text-muted">Turno atual com 96%.</p></div>
+            <div class="notification-list" id="notificationList">
+                <div class="notification-empty text-muted" style="padding:12px 0">Nenhuma notificação recente.</div>
             </div>
         </div>
     </div>
@@ -103,13 +89,13 @@
         <div class="section-title"><h2>Notificações</h2></div>
 
         <div class="grid">
-            <label><input type="checkbox" checked> Notificação por e-mail</label>
+            <label><input type="checkbox" id="notifyEmailCheckbox" checked> Notificação por e-mail</label>
             <label><input type="checkbox" checked> Aviso sonoro</label>
             <label><input type="checkbox"> Alertar supervisor</label>
 
             <div class="form-group">
                 <label>E-mail do supervisor</label>
-                <input type="email" placeholder="supervisor@empresa.com">
+                <input type="email" id="supervisorEmailInput" placeholder="supervisor@empresa.com">
             </div>
         </div>
     </article>

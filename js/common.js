@@ -295,6 +295,46 @@ function createUserChip(profile){
     document.addEventListener("click",()=>menu.classList.remove("active"));
 }
 
+const NOTIFICATION_SEVERITY_META={
+    3:{icon:"fa-triangle-exclamation",color:"var(--danger)",label:"Crítico"},
+    2:{icon:"fa-triangle-exclamation",color:"var(--warning)",label:"Médio"},
+    1:{icon:"fa-shield-halved",color:"var(--success)",label:"Baixo"}
+};
+
+function notificationSeverityMeta(severidade){
+    return NOTIFICATION_SEVERITY_META[severidade]||NOTIFICATION_SEVERITY_META[1];
+}
+
+function renderNotificationPanel(){
+    const list=document.getElementById("notificationList");
+    const count=document.getElementById("notificationCount");
+
+    if(!list||!count)return;
+
+    const alerts=typeof getRecentAlerts==="function"?getRecentAlerts():[];
+
+    count.textContent=String(alerts.length);
+
+    if(!alerts.length){
+        list.innerHTML=`<div class="notification-empty text-muted" style="padding:12px 0">Nenhuma notificação recente.</div>`;
+        return;
+    }
+
+    list.innerHTML=alerts.map(alerta=>{
+        const meta=notificationSeverityMeta(alerta.severidade);
+        const evento=alerta.evento||"Evento não especificado";
+        return `
+            <div class="notification-item">
+                <i class="fa-solid ${meta.icon}" style="color:${meta.color}"></i>
+                <div>
+                    <strong>${escapeHtml(meta.label)}</strong>
+                    <p class="text-muted">${escapeHtml(evento)}</p>
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
 function configureNotifications(){
     const button=document.getElementById("notificationButton");
     const panel=document.getElementById("notificationPanel");
@@ -307,6 +347,28 @@ function configureNotifications(){
     });
 
     document.addEventListener("click",()=>panel.classList.remove("active"));
+
+    // Estado inicial (vazio até o primeiro alerta chegar via WebSocket) e
+    // atualização em tempo real a cada novo alerta recebido.
+    renderNotificationPanel();
+
+    if(typeof onAlert==="function"){
+        onAlert(alerta=>{
+            renderNotificationPanel();
+
+            const meta=notificationSeverityMeta(alerta.severidade);
+            if(typeof showToast==="function"){
+                showToast(
+                    alerta.evento||"Novo alerta recebido",
+                    alerta.severidade>=3?"danger":alerta.severidade===2?"warning":"success"
+                );
+            }
+        });
+    }
+
+    if(typeof initNotifications==="function"){
+        initNotifications();
+    }
 }
 
 const GLOBAL_SEARCH_ITEMS = [

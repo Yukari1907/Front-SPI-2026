@@ -139,6 +139,39 @@ function apiVideoUrl(cameraId) {
     return `${API_BASE_URL}/video/${cameraId}`;
 }
 
+/**
+ * GET com cache curto em sessionStorage (sobrevive à navegação entre páginas
+ * desta app multi-page, ao contrário de uma variável JS solta). Usado para
+ * chamadas repetidas entre páginas, como /cameras e /setores.
+ * @param {string} path
+ * @param {number} ttlMs - tempo de vida do cache, em milissegundos
+ * @returns {Promise<{ok: boolean, status: number, data: any}>}
+ */
+async function apiGetCached(path, ttlMs) {
+    const cacheKey = `visaoepi_cache:${path}`;
+
+    try {
+        const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
+        if (cached && Date.now() - cached.savedAt < ttlMs) {
+            return cached.result;
+        }
+    } catch {
+        // Cache corrompido/indisponível — ignora e busca de novo
+    }
+
+    const result = await apiGet(path);
+
+    if (result.ok) {
+        try {
+            sessionStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), result }));
+        } catch {
+            // sessionStorage indisponível (modo privado, quota) — segue sem cache
+        }
+    }
+
+    return result;
+}
+
 // Expõe as funções globalmente para uso em todos os módulos
 window.API_BASE_URL = API_BASE_URL;
 window.apiGet = apiGet;
@@ -146,3 +179,4 @@ window.apiPost = apiPost;
 window.apiPut = apiPut;
 window.apiDelete = apiDelete;
 window.apiVideoUrl = apiVideoUrl;
+window.apiGetCached = apiGetCached;

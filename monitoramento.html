@@ -10,6 +10,8 @@
     
 
     <script src="js/api.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="js/notifications.js"></script>
     <script src="js/theme.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/common.js" defer></script>
@@ -38,29 +40,13 @@
             <i class="fa-solid fa-bell"></i>
         </button>
 
-        <span class="notification-count">4</span>
+        <span class="notification-count" id="notificationCount">0</span>
 
         <div class="notification-panel" id="notificationPanel">
             <div class="section-title"><h3>Notificações</h3></div>
 
-            <div class="notification-item">
-                <i class="fa-solid fa-triangle-exclamation" style="color:var(--danger)"></i>
-                <div><strong>Estoque crítico</strong><p class="text-muted">Botina Nobuck com 5 unidades.</p></div>
-            </div>
-
-            <div class="notification-item">
-                <i class="fa-solid fa-video" style="color:var(--warning)"></i>
-                <div><strong>Câmera offline</strong><p class="text-muted">Câmera 03 perdeu conexão.</p></div>
-            </div>
-
-            <div class="notification-item">
-                <i class="fa-solid fa-calendar-days" style="color:var(--warning)"></i>
-                <div><strong>Validade próxima</strong><p class="text-muted">2 EPIs vencem em até 30 dias.</p></div>
-            </div>
-
-            <div class="notification-item">
-                <i class="fa-solid fa-shield-halved" style="color:var(--success)"></i>
-                <div><strong>Conformidade alta</strong><p class="text-muted">Turno atual com 96%.</p></div>
+            <div class="notification-list" id="notificationList">
+                <div class="notification-empty text-muted" style="padding:12px 0">Nenhuma notificação recente.</div>
             </div>
         </div>
     </div>
@@ -78,17 +64,15 @@
             <span class="badge success">AO VIVO</span>
         </div>
 
-        <div style="min-height:520px;border-radius:14px;background:linear-gradient(135deg,#111827,#1f2937);display:flex;align-items:center;justify-content:center;color:#fff;position:relative;overflow:hidden">
+        <div class="form-group" style="margin-bottom:12px">
+            <label for="cameraSelect">Câmera</label>
+            <select id="cameraSelect"></select>
+        </div>
+
+        <div id="videoContainer" style="min-height:520px;border-radius:14px;background:linear-gradient(135deg,#111827,#1f2937);display:flex;align-items:center;justify-content:center;color:#fff;position:relative;overflow:hidden">
             <div style="text-align:center">
                 <i class="fa-solid fa-video" style="font-size:64px;opacity:.45"></i>
-                <h3 style="margin-top:16px">Feed da Câmera 03</h3>
-                <p style="opacity:.7">Integração preparada para YOLO/OpenCV</p>
-            </div>
-
-            <div style="position:absolute;left:28%;top:26%;width:180px;height:250px;border:3px solid #22c55e;border-radius:8px">
-                <span style="position:absolute;top:-26px;left:-3px;background:#22c55e;padding:4px 8px;border-radius:6px">
-                    Pessoa 98%
-                </span>
+                <p style="opacity:.7;margin-top:12px">Selecione uma câmera para iniciar o stream.</p>
             </div>
         </div>
     </article>
@@ -97,6 +81,13 @@
         <article class="card">
             <div class="section-title"><h2>Câmeras</h2></div>
             <div id="cameraList"></div>
+        </article>
+
+        <article class="card">
+            <div class="section-title"><h2>Detecções</h2></div>
+            <div id="detectionsContainer">
+                <div style="padding:12px 0;color:var(--text-muted)">Nenhuma detecção recente.</div>
+            </div>
         </article>
 
         <article class="card">
