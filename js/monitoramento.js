@@ -165,22 +165,40 @@ function renderVideoStream(cameraId) {
 
     const streamUrl = apiVideoUrl(cameraId);
 
-    // Usa tag <img> para MJPEG stream (padrão suportado pelo backend Flask)
+    // Cria a camada de vídeo + overlay SVG perfeitamente alinhados
     container.innerHTML = `
-        <img
-            id="videoStream"
-            src="${streamUrl}"
-            alt="Stream câmera ${cameraId}"
-            style="
-                width:100%;
-                max-height:480px;
-                object-fit:contain;
-                border-radius:8px;
-                background:#000;
-            "
-            onerror="handleStreamError(this)"
-        >
+        <div id="streamWrapper" style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+            <img
+                id="videoStream"
+                src="${streamUrl}"
+                alt="Stream câmera ${cameraId}"
+                style="
+                    width: 100%;
+                    max-height: 520px;
+                    object-fit: contain;
+                    border-radius: 8px;
+                    background: #000;
+                    display: block;
+                "
+                onerror="handleStreamError(this)"
+            >
+            <!-- SVG sobreposto ao frame -->
+            <svg 
+                id="zonasOverlay" 
+                style="
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    pointer-events: none;
+                "
+            ></svg>
+        </div>
     `;
+
+    // Dispara a busca das zonas da câmera selecionada
+    fetchZonas(cameraId);
 }
 
 function handleStreamError(img) {
@@ -250,6 +268,97 @@ function stopDetectionsPolling() {
         detectionsInterval = null;
         detectionsCameraId = null;
     }
+}
+
+let currentCameraZonas = [];
+
+// ─────────────────────────────────────────────
+// Busca e Renderização de Zonas
+// ─────────────────────────────────────────────
+
+async function fetchZonas(cameraId) {
+    try {
+        const result = await apiGet(`/zonas/camera/${cameraId}`);
+        if (result.ok && Array.isArray(result.data)) {
+            currentCameraZonas = result.data;
+        } else {
+            currentCameraZonas = [];
+        }
+    } catch (e) {
+        console.error("[Monitoramento] Erro ao buscar zonas:", e);
+        currentCameraZonas = [];
+    }
+    renderZonasOverlay();
+}
+
+function renderZonasOverlay() {
+    const overlay = document.getElementById("zonasOverlay");
+    if (!overlay) return;
+
+    if (!currentCameraZonas || currentCameraZonas.length === 0) {
+        overlay.innerHTML = "";
+        return;
+    }
+
+    // A proporção da "Golden Ratio" garante que tons fiquem bem espalhados pela roda de cores
+    const GOLDEN_RATIO_CONJUGATE = 0.618033988749895;
+
+    overlay.innerHTML = currentCameraZonas.map((zona, index) => {
+        // Conversão de escala 0.0-1.0 para porcentagem (%)
+        const x = (zona.x * 100).toFixed(2);
+        const y = (zona.y * 100).toFixed(2);
+        const w = (zona.largura * 100).toFixed(2);
+        const h = (zona.altura * 100).toFixed(2);
+
+        // Se a zona tiver ID numérico, usamos ele; caso contrário, usamos o índice
+        const seed = Number(zona.id) || (index + 1);
+        
+        // Gera um ângulo de matiz (0 a 360) único e bem contrastado
+        const hue = Math.floor(((seed * GOLDEN_RATIO_CONJUGATE) % 1) * 360);
+
+        // Cores derivadas do mesmo matiz (HSL)
+        const strokeColor = `hsla(${hue}, 85%, 55%, 0.85)`; // Borda bem visível
+        const fillColor   = `hsla(${hue}, 85%, 55%, 0.07)`; // Fundo quase transparente (4% opacidade)
+        const badgeBg     = `hsl(${hue}, 75%, 42%)`;        // Fundo sólido e elegante da etiqueta
+
+        return `
+            <g class="zona-group" data-id="${zona.id}">
+                <!-- Retângulo da zona -->
+                <rect 
+                    x="${x}%" y="${y}%" 
+                    width="${w}%" height="${h}%" 
+                    fill="${fillColor}" 
+                    stroke="${strokeColor}" 
+                    stroke-width="2" 
+                    stroke-dasharray="5 3"
+                    rx="4"
+                />
+                
+                <!-- Badge superior moderna com cor combinando -->
+                <foreignObject x="${x}%" y="${y}%" width="${w}%" height="32px" style="overflow: visible;">
+                    <div xmlns="http://www.w3.org/1999/xhtml" style="
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                        background: ${badgeBg};
+                        color: #ffffff;
+                        padding: 2px 8px;
+                        border-radius: 4px 0 6px 0;
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                        font-size: 11px;
+                        font-weight: 600;
+                        text-transform: uppercase;
+                        letter-spacing: 0.5px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.35);
+                        pointer-events: none;
+                    ">
+                        <i class="fa-solid ${zona.permitido ? 'fa-shield-halved' : 'fa-triangle-exclamation'}" style="font-size: 10px;"></i>
+                        <span>${escapeHtml(zona.nome || 'Zona')}</span>
+                    </div>
+                </foreignObject>
+            </g>
+        `;
+    }).join("");
 }
 
 // ─────────────────────────────────────────────
