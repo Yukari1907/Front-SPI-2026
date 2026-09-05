@@ -88,23 +88,73 @@ async function loadDashboardEvents() {
     }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+// Categorias de EPI exibidas no gráfico de rosca. Ver CONTRATO_INTEGRACAO.md:
+// GET /alertas/estatisticas/epi só devolve categorias que já tiveram alerta
+// (sem total:0 para as ausentes) — o frontend precisa completar com zero.
+const DASHBOARD_PPE_CATEGORIES = ["Capacete", "Colete", "Luvas", "Óculos", "Botina"];
+const DASHBOARD_PPE_COLORS = ["#3155f5", "#2e7d32", "#f59e0b", "#0ea5e9", "#7c3aed"];
+
+const DASHBOARD_PPE_FALLBACK = [98, 96, 94, 89, 97];
+const DASHBOARD_ALERTS_FALLBACK = {
+    labels: ["Seg 08h", "Seg 14h", "Ter 08h", "Ter 14h", "Qua 08h", "Qua 14h", "Qui 08h", "Qui 14h", "Sex 08h", "Sex 14h"],
+    data: [3, 5, 4, 7, 2, 6, 5, 8, 6, 9]
+};
+
+function formatDia(diaStr) {
+    const date = new Date(`${diaStr}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return diaStr;
+    return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(date);
+}
+
+async function loadPpeChartData() {
+    const result = await apiGet("/alertas/estatisticas/epi");
+
+    if (result.status === 0 || !result.ok || !Array.isArray(result.data)) {
+        showToast("Estatísticas de EPI indisponíveis — exibindo dados de exemplo.", "warning");
+        return DASHBOARD_PPE_FALLBACK;
+    }
+
+    // Completa com zero as categorias que não aparecem na resposta
+    // (nunca geraram alerta), conforme o contrato.
+    const totaisPorCategoria = {};
+    result.data.forEach(item => {
+        totaisPorCategoria[item.categoria] = item.total;
+    });
+
+    return DASHBOARD_PPE_CATEGORIES.map(categoria => totaisPorCategoria[categoria] || 0);
+}
+
+async function loadAlertsChartData() {
+    const result = await apiGet("/alertas/estatisticas/periodo");
+
+    if (result.status === 0 || !result.ok || !Array.isArray(result.data)) {
+        showToast("Estatísticas de alertas por período indisponíveis — exibindo dados de exemplo.", "warning");
+        return DASHBOARD_ALERTS_FALLBACK;
+    }
+
+    return {
+        labels: result.data.map(item => formatDia(item.dia)),
+        data: result.data.map(item => item.total)
+    };
+}
+
+document.addEventListener("DOMContentLoaded", async () => {
     // Carrega eventos reais
     loadDashboardEvents();
 
-    // Gráficos — mantidos com dados demonstrativos
-    // (não há API de séries históricas no backend)
     const dark = document.documentElement.dataset.theme === "dark";
     Chart.defaults.color = dark ? "#e2e8f0" : "#374151";
     Chart.defaults.borderColor = dark ? "#334155" : "#e5e7eb";
 
+    const ppeData = await loadPpeChartData();
+
     new Chart(document.getElementById("dashboardPpeChart"), {
         type: "doughnut",
         data: {
-            labels: ["Capacete", "Colete", "Luvas", "Óculos", "Botina"],
+            labels: DASHBOARD_PPE_CATEGORIES,
             datasets: [{
-                data: [98, 96, 94, 89, 97],
-                backgroundColor: ["#3155f5", "#2e7d32", "#f59e0b", "#0ea5e9", "#7c3aed"]
+                data: ppeData,
+                backgroundColor: DASHBOARD_PPE_COLORS
             }]
         },
         options: {
@@ -115,13 +165,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    const alertsData = await loadAlertsChartData();
+
     new Chart(document.getElementById("dashboardAlertsChart"), {
         type: "line",
         data: {
-            labels: ["Seg 08h", "Seg 14h", "Ter 08h", "Ter 14h", "Qua 08h", "Qua 14h", "Qui 08h", "Qui 14h", "Sex 08h", "Sex 14h"],
+            labels: alertsData.labels,
             datasets: [{
                 label: "Alertas",
-                data: [3, 5, 4, 7, 2, 6, 5, 8, 6, 9],
+                data: alertsData.data,
                 borderColor: "#dc2626",
                 backgroundColor: "rgba(220,38,38,.16)",
                 fill: true,

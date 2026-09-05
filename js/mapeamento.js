@@ -38,16 +38,22 @@ function generatePositions(count) {
     return positions;
 }
 
+// TTL curto (45s) — sobrevive à navegação entre páginas via sessionStorage,
+// mas não serve dado desatualizado por muito tempo após um cadastro novo.
+const CAMERAS_SETORES_CACHE_TTL_MS = 45000;
+
 async function loadMapeamento() {
     try {
-        // Carrega setores e câmeras em paralelo
+        // Carrega setores e câmeras em paralelo (cache curto — mesma chamada
+        // que monitoramento.js faz ao navegar entre as duas páginas)
         const [setoresResult, camerasResult] = await Promise.all([
-            apiGet("/setores"),
-            apiGet("/cameras")
+            apiGetCached("/setores", CAMERAS_SETORES_CACHE_TTL_MS),
+            apiGetCached("/cameras", CAMERAS_SETORES_CACHE_TTL_MS)
         ]);
 
         renderSectorList(setoresResult, camerasResult);
         renderFactoryMap(camerasResult);
+        configureMapAlertIndicator();
 
     } catch (e) {
         console.error("[Mapeamento] Erro ao carregar dados:", e);
@@ -135,6 +141,62 @@ function renderFactoryMap(camerasResult) {
             </button>
         `;
     }).join("");
+}
+
+// ─────────────────────────────────────────────
+// Indicador de alerta em tempo real (genérico)
+// ─────────────────────────────────────────────
+// O payload do WebSocket (ver CONTRATO_INTEGRACAO.md) só tem
+// {id_monitorar, id_usuario, evento, severidade} — sem id_camera — então não
+// dá para acender o ícone da câmera específica no mapa a partir do evento.
+// Enquanto isso não mudar no backend, mostramos só que HOUVE alerta recente,
+// sem apontar para uma câmera exata.
+
+let mapAlertCount = 0;
+let mapAlertConfigured = false;
+
+function configureMapAlertIndicator() {
+    if (mapAlertConfigured) return;
+    if (typeof onAlert !== "function") return;
+
+    mapAlertConfigured = true;
+
+    onAlert(alerta => {
+        mapAlertCount += 1;
+        renderMapAlertIndicator(alerta);
+    });
+}
+
+function renderMapAlertIndicator(alerta) {
+    const factoryMap = document.getElementById("factoryMap");
+    if (!factoryMap) return;
+
+    let badge = document.getElementById("mapAlertIndicator");
+
+    if (!badge) {
+        badge = document.createElement("div");
+        badge.id = "mapAlertIndicator";
+        badge.style.cssText = `
+            position:absolute;top:12px;right:12px;z-index:2;
+            background:var(--danger);color:#fff;padding:8px 14px;
+            border-radius:20px;font-size:0.8125rem;display:flex;
+            align-items:center;gap:8px;box-shadow:0 4px 12px rgba(0,0,0,.18);
+        `;
+        factoryMap.appendChild(badge);
+    }
+
+    const evento = alerta.evento || "Novo alerta";
+    badge.innerHTML = `
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span>${escapeHtml(evento)} (${mapAlertCount})</span>
+    `;
+
+    badge.style.opacity = "1";
+    clearTimeout(badge._fadeTimeout);
+    badge._fadeTimeout = setTimeout(() => {
+        badge.style.transition = "opacity .6s";
+        badge.style.opacity = "0";
+    }, 6000);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
