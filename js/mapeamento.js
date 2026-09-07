@@ -38,6 +38,9 @@ function generatePositions(count) {
     return positions;
 }
 
+let mappingCameras = [];
+let mappingZones = [];
+
 // TTL curto (45s) — sobrevive à navegação entre páginas via sessionStorage,
 // mas não serve dado desatualizado por muito tempo após um cadastro novo.
 const CAMERAS_SETORES_CACHE_TTL_MS = 45000;
@@ -51,8 +54,12 @@ async function loadMapeamento() {
             apiGetCached("/cameras", CAMERAS_SETORES_CACHE_TTL_MS)
         ]);
 
+        mappingCameras = Array.isArray(camerasResult.data) ? camerasResult.data : [];
+
         renderSectorList(setoresResult, camerasResult);
         renderFactoryMap(camerasResult);
+        populateZoneCameraSelect(mappingCameras);
+        await loadRiskZones(mappingCameras);
         configureMapAlertIndicator();
 
     } catch (e) {
@@ -200,5 +207,6 @@ function renderMapAlertIndicator(alerta) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    configureZoneCreation();
     loadMapeamento();
 });

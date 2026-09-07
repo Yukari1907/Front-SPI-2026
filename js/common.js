@@ -305,6 +305,46 @@ function notificationSeverityMeta(severidade){
     return NOTIFICATION_SEVERITY_META[severidade]||NOTIFICATION_SEVERITY_META[1];
 }
 
+
+function ensureNotificationClearButton(){
+    const panel=document.getElementById("notificationPanel");
+    if(!panel)return null;
+
+    let button=document.getElementById("clearNotificationsButton");
+
+    if(button)return button;
+
+    const title=panel.querySelector(".section-title");
+    if(!title)return null;
+
+    title.style.alignItems="center";
+
+    button=document.createElement("button");
+    button.id="clearNotificationsButton";
+    button.type="button";
+    button.className="notification-clear-btn";
+    button.innerHTML='<i class="fa-solid fa-broom"></i><span>Limpar</span>';
+    button.title="Limpar notificações recentes";
+
+    title.appendChild(button);
+
+    button.addEventListener("click",event=>{
+        event.stopPropagation();
+
+        if(typeof clearRecentAlerts==="function"){
+            clearRecentAlerts();
+        }
+
+        renderNotificationPanel();
+
+        if(typeof showToast==="function"){
+            showToast("Notificações recentes limpas.");
+        }
+    });
+
+    return button;
+}
+
 function renderNotificationPanel(){
     const list=document.getElementById("notificationList");
     const count=document.getElementById("notificationCount");
@@ -348,8 +388,8 @@ function configureNotifications(){
 
     document.addEventListener("click",()=>panel.classList.remove("active"));
 
-    // Estado inicial (vazio até o primeiro alerta chegar via WebSocket) e
-    // atualização em tempo real a cada novo alerta recebido.
+    // Adiciona o botão de limpar e renderiza o estado inicial.
+    ensureNotificationClearButton();
     renderNotificationPanel();
 
     if(typeof onAlert==="function"){
