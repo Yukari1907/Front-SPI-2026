@@ -11,11 +11,12 @@
  *   DELETE /alertas/<id>       → excluir alerta
  *
  * Nota: O backend retorna campos estruturais (id_camera, id_zona, id_epi, evento).
- * Os campos de exibição do frontend (sector, worker, severity, description, action)
- * não existem no banco — são exibidos com valores padrão quando ausentes.
+ * Severidade vem de severidade (inteiro). Campos de exibição como sector,
+ * worker, description e action usam os dados disponíveis ou valores padrão.
  */
 
 let alerts = [];
+let alertsLoaded = false;
 let currentAlertId = null;
 
 const $ = id => document.getElementById(id);
@@ -39,26 +40,15 @@ function fromApiAlerta(apiAlerta) {
         sector: apiAlerta.id_zona ? `Zona ${apiAlerta.id_zona}` : "Não especificado",
         camera: apiAlerta.id_camera ? `Câmera ${apiAlerta.id_camera}` : "Não especificada",
         worker: apiAlerta.id_usuario ? `Usuário ${apiAlerta.id_usuario}` : "Não identificado",
-        // Severidade inferida a partir do evento
-        severity: inferSeverity(apiAlerta.evento),
+        // Severidade persistida, sem inferir pelo texto do evento.
+        severidade: apiAlerta.severidade,
+        severity: notificationSeverityMeta(apiAlerta.severidade).label,
         status: apiAlerta.resolvido ? "Resolvido" : "Pendente",
         description: `Alerta detectado: ${apiAlerta.evento || "evento não especificado"}.`,
         action: apiAlerta.resolvido
             ? "Ocorrência revisada e marcada como resolvida no sistema."
             : "Verifique o evento e tome as medidas necessárias."
     };
-}
-
-/**
- * Infere severidade com base nas palavras-chave do evento.
- * O backend não tem campo de severidade — inferimos a partir do texto.
- */
-function inferSeverity(evento) {
-    if (!evento) return "Médio";
-    const ev = evento.toLowerCase();
-    if (ev.includes("capacete") || ev.includes("restrita") || ev.includes("incêndio")) return "Crítico";
-    if (ev.includes("luva") || ev.includes("bota") || ev.includes("colete")) return "Médio";
-    return "Baixo";
 }
 
 // ─────────────────────────────────────────────
@@ -68,29 +58,29 @@ function inferSeverity(evento) {
 async function loadAlertsFromApi() {
     try {
         const result = await apiGet("/alertas");
-
-        if (result.status === 0) {
-            showToast("Backend indisponível. Sem dados de alertas.", "warning");
-            renderAlerts();
-            return;
-        }
-
-        if (result.ok && Array.isArray(result.data)) {
-            alerts = result.data.map(fromApiAlerta);
-        } else if (result.status === 404) {
-            // Backend retorna 404 quando não há alertas
-            alerts = [];
-        } else {
-            showToast("Não foi possível carregar os alertas.", "danger");
-            alerts = [];
-        }
-
-        renderAlerts();
+        alertsLoaded = (result.ok && Array.isArray(result.data)) || result.status === 404;
+        alerts = result.ok && Array.isArray(result.data) ? result.data.map(fromApiAlerta) : [];
+        if (!alertsLoaded) showToast("Não foi possível carregar os alertas.", "warning");
     } catch (e) {
         console.error("[Alertas] Erro ao carregar alertas:", e);
+        alertsLoaded = false;
         alerts = [];
-        renderAlerts();
     }
+    renderAlerts();
+}
+
+// Contagem global da listagem completa documentada em /alertas.
+// Os filtros da tabela não alteram os cards; resolvidos também contam na severidade.
+function renderAlertCounts() {
+    const counts = {
+        alertsCritical: alerts.filter(alert => alert.severidade === 3).length,
+        alertsMedium: alerts.filter(alert => alert.severidade === 2).length,
+        alertsLow: alerts.filter(alert => alert.severidade === 1).length,
+        alertsResolved: alerts.filter(alert => alert.resolvido === true).length
+    };
+    Object.entries(counts).forEach(([id, count]) => {
+        if ($(id)) $(id).textContent = alertsLoaded ? String(count) : "—";
+    });
 }
 
 // ─────────────────────────────────────────────
@@ -109,7 +99,7 @@ function formatDateTime(value) {
 function severityClass(severity) {
     if (severity === "Crítico") return "danger";
     if (severity === "Médio") return "warning";
-    return "success";
+    return severity === "Baixo" ? "success" : "";
 }
 
 function normalizeFilterText(value) {
@@ -143,13 +133,14 @@ function getFilteredAlerts() {
 }
 
 function renderAlerts() {
+    renderAlertCounts();
     const filteredAlerts = getFilteredAlerts();
 
     if (!filteredAlerts.length) {
         $("alertsTable").innerHTML = `
             <tr>
                 <td colspan="6" class="empty">
-                    Nenhum alerta encontrado com os filtros selecionados.
+                    ${alertsLoaded ? "Nenhum alerta encontrado com os filtros selecionados." : "Não foi possível carregar os alertas."}
                 </td>
             </tr>
         `;

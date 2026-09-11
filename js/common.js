@@ -296,13 +296,15 @@ function createUserChip(profile){
 }
 
 const NOTIFICATION_SEVERITY_META={
-    3:{icon:"fa-triangle-exclamation",color:"var(--danger)",label:"Crítico"},
-    2:{icon:"fa-triangle-exclamation",color:"var(--warning)",label:"Médio"},
-    1:{icon:"fa-shield-halved",color:"var(--success)",label:"Baixo"}
+    3:{badge:"danger",icon:"fa-triangle-exclamation",color:"var(--danger)",label:"Crítico"},
+    2:{badge:"warning",icon:"fa-triangle-exclamation",color:"var(--warning)",label:"Médio"},
+    1:{badge:"success",icon:"fa-shield-halved",color:"var(--success)",label:"Baixo"}
 };
 
 function notificationSeverityMeta(severidade){
-    return NOTIFICATION_SEVERITY_META[severidade]||NOTIFICATION_SEVERITY_META[1];
+    return NOTIFICATION_SEVERITY_META[severidade]||{
+        badge:"",icon:"fa-circle-info",color:"var(--text-muted)",label:"Não informada"
+    };
 }
 
 function renderNotificationPanel(){
@@ -322,7 +324,7 @@ function renderNotificationPanel(){
 
     list.innerHTML=alerts.map(alerta=>{
         const meta=notificationSeverityMeta(alerta.severidade);
-        const evento=alerta.evento||"Evento não especificado";
+        const evento=formatAlertNotification(alerta);
         return `
             <div class="notification-item">
                 <i class="fa-solid ${meta.icon}" style="color:${meta.color}"></i>
@@ -356,10 +358,9 @@ function configureNotifications(){
         onAlert(alerta=>{
             renderNotificationPanel();
 
-            const meta=notificationSeverityMeta(alerta.severidade);
             if(typeof showToast==="function"){
                 showToast(
-                    alerta.evento||"Novo alerta recebido",
+                    formatAlertNotification(alerta),
                     alerta.severidade>=3?"danger":alerta.severidade===2?"warning":"success"
                 );
             }

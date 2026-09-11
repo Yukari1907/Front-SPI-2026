@@ -7,8 +7,7 @@
  * API utilizada:
  *   GET /alertas → lista alertas (usa os 3 mais recentes para o dashboard)
  *
- * Os gráficos continuam com dados estáticos demonstrativos
- * (não há API de séries históricas no backend).
+ * Estatísticas e status usam as rotas documentadas em CONTRATO_INTEGRACAO.md.
  */
 
 function formatTime(dateStr) {
@@ -18,12 +17,11 @@ function formatTime(dateStr) {
     return new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" }).format(date);
 }
 
-function inferBadge(evento) {
-    if (!evento) return "success";
-    const ev = evento.toLowerCase();
-    if (ev.includes("capacete") || ev.includes("restrita")) return "danger";
-    if (ev.includes("óculos") || ev.includes("oculos") || ev.includes("luva")) return "warning";
-    return "success";
+async function loadDashboardKpis() {
+    const cameras = await apiGet("/cameras/status");
+    const cameraCount = document.getElementById("dashboardCamerasOnline");
+    if (cameraCount) cameraCount.textContent = cameras.ok && Array.isArray(cameras.data)
+        ? `${cameras.data.filter(camera => camera.status === "Ativo").length}/${cameras.data.length}` : "—";
 }
 
 async function loadDashboardEvents() {
@@ -33,7 +31,7 @@ async function loadDashboardEvents() {
     try {
         const result = await apiGet("/alertas");
 
-        if (result.status === 0 || !result.ok) {
+        if (result.status !== 404 && !result.ok) {
             // Backend indisponível — exibe mensagem amigável
             tbody.innerHTML = `
                 <tr>
@@ -56,12 +54,13 @@ async function loadDashboardEvents() {
             return;
         }
 
-        // Exibe os 3 alertas mais recentes (assumindo que vêm ordenados do backend)
-        const recentes = alertas.slice(0, 3);
+        // A listagem não garante ordenação; a data REST permite ordenação lexical.
+        const recentes = [...alertas].sort((a, b) => String(b.data || "").localeCompare(String(a.data || ""))).slice(0, 3);
 
         tbody.innerHTML = recentes.map(alerta => {
-            const badge = alerta.resolvido ? "success" : inferBadge(alerta.evento);
-            const status = alerta.resolvido ? "Conforme" : "Não conforme";
+            const meta = notificationSeverityMeta(alerta.severidade);
+            const badge = meta.badge;
+            const status = alerta.resolvido ? "Resolvido" : "Pendente";
             const camera = alerta.id_camera ? `Câmera ${alerta.id_camera}` : "Câmera";
             const zona = alerta.id_zona ? `— Zona ${alerta.id_zona}` : "";
             const descricao = alerta.evento || "Evento não especificado";
@@ -70,7 +69,7 @@ async function loadDashboardEvents() {
                 <tr>
                     <td>${formatTime(alerta.data)}</td>
                     <td>${escapeHtml(camera)} ${escapeHtml(zona)}</td>
-                    <td><span class="badge ${badge}">${escapeHtml(status)}</span></td>
+                    <td><span class="badge ${badge}">${escapeHtml(meta.label)}</span><small class="text-muted"> ${escapeHtml(status)}</small></td>
                     <td>${escapeHtml(descricao)}</td>
                 </tr>
             `;
@@ -141,6 +140,7 @@ async function loadAlertsChartData() {
 document.addEventListener("DOMContentLoaded", async () => {
     // Carrega eventos reais
     loadDashboardEvents();
+    loadDashboardKpis();
 
     const dark = document.documentElement.dataset.theme === "dark";
     Chart.defaults.color = dark ? "#e2e8f0" : "#374151";

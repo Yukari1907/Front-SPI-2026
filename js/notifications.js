@@ -7,7 +7,7 @@
  * Backend usa flask-socketio (não WebSocket nativo), então o cliente aqui
  * precisa ser socket.io-client (carregado via CDN nas páginas autenticadas).
  * Ver CONTRATO_INTEGRACAO.md — evento "novo_alerta", payload:
- *   { id_monitorar, id_usuario, evento, severidade }
+ *   { id_monitorar, id_usuario, id_camera, id_zona, nome_camera, nome_setor, nome_zona, evento, severidade, tipo_deteccao }
  * (sem "id" do alerta — o INSERT no backend não usa RETURNING).
  *
  * Expõe um pub/sub simples (onAlert) para outras páginas/módulos assinarem,
@@ -76,6 +76,19 @@ function onAlert(callback) {
         alertListeners.push(callback);
     }
 }
+
+// Texto compartilhado pelo painel e pelo toast. Escape HTML ocorre na renderização.
+function formatAlertNotification(alerta) {
+    const location = [
+        alerta.nome_camera || (alerta.id_camera != null ? `Câmera ${alerta.id_camera}` : null),
+        alerta.nome_setor,
+        alerta.nome_zona || (alerta.id_zona != null ? `Zona ${alerta.id_zona}` : null)
+    ].filter(Boolean).join(" · ");
+    const event = alerta.evento || "Evento não especificado";
+    return location ? `${event} — ${location}` : event;
+}
+
+window.formatAlertNotification = formatAlertNotification;
 
 function getRecentAlerts() {
     return recentAlerts;

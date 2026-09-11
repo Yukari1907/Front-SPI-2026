@@ -61,12 +61,13 @@
     <article class="card">
         <div class="section-title">
             <h2>Stream de Monitoramento</h2>
-            <span class="badge success">AO VIVO</span>
+            <span id="cameraConnectionStatus" class="badge">Aguardando câmera</span>
         </div>
 
         <div class="form-group" style="margin-bottom:12px">
             <label for="cameraSelect">Câmera</label>
             <select id="cameraSelect"></select>
+            <a class="btn secondary" href="http://localhost:5001" target="_blank" rel="noopener noreferrer">Revisão de Dataset</a>
         </div>
 
         <div id="videoContainer" style="min-height:520px;border-radius:14px;background:linear-gradient(135deg,#111827,#1f2937);display:flex;align-items:center;justify-content:center;color:#fff;position:relative;overflow:hidden">
@@ -93,11 +94,11 @@
         <article class="card">
             <div class="section-title"><h2>Desempenho</h2></div>
 
-            <p>FPS <strong style="float:right">28</strong></p>
-            <div class="progress" style="margin:8px 0 16px"><span style="width:88%"></span></div>
+            <p title="Barra proporcional ao alvo visual de 30 FPS">FPS <strong id="performanceFps" style="float:right">—</strong></p>
+            <div class="progress" style="margin:8px 0 16px"><span id="performanceFpsBar" style="width:0%"></span></div>
 
-            <p>Latência <strong style="float:right">46 ms</strong></p>
-            <div class="progress" style="margin-top:8px"><span style="width:32%"></span></div>
+            <p title="Barra proporcional a 200 ms; menor latência é melhor">Latência <strong id="performanceLatency" style="float:right">—</strong></p>
+            <div class="progress" style="margin-top:8px"><span id="performanceLatencyBar" style="width:0%"></span></div>
         </article>
     </aside>
 </div>
