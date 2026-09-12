@@ -58,10 +58,10 @@
 
         
 <div class="grid kpi-grid">
-    <article class="card kpi"><i class="fa-solid fa-circle-exclamation"></i><h3>Críticos</h3><strong>3</strong><p class="text-muted">Ação imediata</p></article>
-    <article class="card kpi"><i class="fa-solid fa-triangle-exclamation"></i><h3>Médios</h3><strong>8</strong><p class="text-muted">Em análise</p></article>
-    <article class="card kpi"><i class="fa-solid fa-circle-info"></i><h3>Baixos</h3><strong>14</strong><p class="text-muted">Acompanhamento</p></article>
-    <article class="card kpi"><i class="fa-solid fa-circle-check"></i><h3>Resolvidos</h3><strong>42</strong><p class="text-muted">No mês</p></article>
+    <article class="card kpi"><i class="fa-solid fa-circle-exclamation"></i><h3>Críticos</h3><strong id="alertsCritical">—</strong><p class="text-muted">Todo o histórico</p></article>
+    <article class="card kpi"><i class="fa-solid fa-triangle-exclamation"></i><h3>Médios</h3><strong id="alertsMedium">—</strong><p class="text-muted">Todo o histórico</p></article>
+    <article class="card kpi"><i class="fa-solid fa-circle-info"></i><h3>Baixos</h3><strong id="alertsLow">—</strong><p class="text-muted">Todo o histórico</p></article>
+    <article class="card kpi"><i class="fa-solid fa-circle-check"></i><h3>Resolvidos</h3><strong id="alertsResolved">—</strong><p class="text-muted">Todo o histórico</p></article>
 </div>
 
 <article class="card">
@@ -83,6 +83,10 @@
             <tbody id="alertsTable"></tbody>
         </table>
     </div>
+    <nav class="action-buttons" aria-label="Paginação de alertas">
+        <button class="btn secondary" type="button" id="alertsPrevious" disabled>Anterior</button>
+        <button class="btn secondary" type="button" id="alertsNext" disabled>Próximo</button>
+    </nav>
 </article>
 
     </main>
