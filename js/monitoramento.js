@@ -104,7 +104,7 @@ function renderCameraList(setoresMap) {
                     <small class="text-muted">${escapeHtml(camera.ip)} — ${escapeHtml(setorNome)}</small>
                 </span>
 
-                <span class="badge success">Online</span>
+                <span class="badge" data-camera-status="${camera.id}">Não verificado</span>
             </button>
         `;
     }).join("");
@@ -227,47 +227,80 @@ function handleStreamError(img) {
 
 let detectionsInterval = null;
 let detectionsCameraId = null;
+let detectionsPollVersion = 0;
+const MONITORING_FPS_TARGET = 30;
+const MONITORING_LATENCY_SCALE_MS = 200;
 
-async function fetchDetections(cameraId) {
+function renderDetectionState(data, message = "") {
+    const connected = data?.connected === true;
+    const validMetric = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
+    const fps = connected && validMetric(data.fps) ? data.fps : 0;
+    const latency = connected && validMetric(data.latencia_ms) ? data.latencia_ms : null;
+    const setText = (id, text) => {
+        const element = document.getElementById(id);
+        if (element) element.textContent = text;
+    };
+    setText("performanceFps", data ? fps.toFixed(1) : "—");
+    setText("performanceLatency", latency === null ? "—" : `${latency.toFixed(1)} ms`);
+    [["performanceFpsBar", fps / MONITORING_FPS_TARGET],
+        ["performanceLatencyBar", (latency || 0) / MONITORING_LATENCY_SCALE_MS]].forEach(([id, ratio]) => {
+        const bar = document.getElementById(id);
+        if (bar) bar.style.width = `${Math.min(100, Math.max(0, ratio * 100))}%`;
+    });
+    const statusText = message || (connected ? "Conectada" : "Desconectada");
+    const statusClass = connected ? "badge success" : "badge";
+    const status = document.getElementById("cameraConnectionStatus");
+    if (status) { status.textContent = statusText; status.className = statusClass; }
+    const cameraBadge = document.querySelector(`[data-camera-status="${currentCameraId}"]`);
+    if (cameraBadge) { cameraBadge.textContent = statusText; cameraBadge.className = statusClass; }
+
     const container = document.getElementById("detectionsContainer");
     if (!container) return;
+    const detections = connected && Array.isArray(data.detections) ? data.detections : [];
+    const counts = connected && data.class_count && typeof data.class_count === "object" && !Array.isArray(data.class_count)
+        ? Object.entries(data.class_count).filter(([, count]) => validMetric(count)) : [];
+    const summary = counts.length ? `<p class="text-muted">Contagem no frame: ${counts.map(([label, count]) => `${escapeHtml(label)}: ${count}`).join(" · ")}</p>` : "";
+    container.innerHTML = summary + (detections.length ? detections.map(det => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:0.875rem;">
+            <strong>${escapeHtml(String(det.label || "Detecção"))}</strong>
+            ${validMetric(det.confidence) ? `<span class="text-muted"> — confiança: ${(det.confidence * 100).toFixed(1)}%</span>` : ""}
+        </div>
+    `).join("") : `<div style="padding:12px 0;color:var(--text-muted)">${escapeHtml(message || (connected ? "Nenhuma detecção recente." : "Câmera desconectada."))}</div>`);
+}
 
+async function fetchDetections(cameraId, version = detectionsPollVersion) {
     try {
         const result = await apiGet(`/detections/${cameraId}`);
-
-        if (result.ok && Array.isArray(result.data) && result.data.length > 0) {
-            container.innerHTML = result.data.map(det => `
-                <div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:0.875rem;">
-                    <strong>${escapeHtml(String(det.label || det.class_name || "Detecção"))}</strong>
-                    ${det.confidence ? `<span class="text-muted"> — confiança: ${(det.confidence * 100).toFixed(1)}%</span>` : ""}
-                </div>
-            `).join("");
-        } else if (result.status === 0) {
-            // Backend offline — para o polling
-            stopDetectionsPolling();
-        } else {
-            container.innerHTML = '<div style="padding:12px 0;color:var(--text-muted)">Nenhuma detecção recente.</div>';
-        }
+        if (cameraId !== currentCameraId || version !== detectionsPollVersion) return;
+        const valid = result.ok && result.data && typeof result.data.connected === "boolean";
+        renderDetectionState(valid ? result.data : null, valid ? "" : "Detecções indisponíveis.");
     } catch (e) {
-        // Silencioso — detecções são secundárias
+        if (cameraId === currentCameraId && version === detectionsPollVersion) {
+            renderDetectionState(null, "Detecções indisponíveis.");
+        }
     }
 }
 
 function startDetectionsPolling(cameraId) {
-    if (detectionsInterval && detectionsCameraId === cameraId) return;
-
     stopDetectionsPolling();
     detectionsCameraId = cameraId;
-    fetchDetections(cameraId); // Imediato
-    detectionsInterval = setInterval(() => fetchDetections(cameraId), 3000); // A cada 3s
+    const version = detectionsPollVersion;
+    renderDetectionState(null, "Consultando câmera...");
+    // Agenda após a resposta: evita sobreposição e continua após 503/falha de rede.
+    const poll = async () => {
+        await fetchDetections(cameraId, version);
+        if (version === detectionsPollVersion && detectionsCameraId === cameraId) {
+            detectionsInterval = setTimeout(poll, 3000);
+        }
+    };
+    poll();
 }
 
 function stopDetectionsPolling() {
-    if (detectionsInterval) {
-        clearInterval(detectionsInterval);
-        detectionsInterval = null;
-        detectionsCameraId = null;
-    }
+    detectionsPollVersion += 1;
+    clearTimeout(detectionsInterval);
+    detectionsInterval = null;
+    detectionsCameraId = null;
 }
 
 let currentCameraZonas = [];
