@@ -18,6 +18,8 @@
 let alerts = [];
 let alertsLoaded = false;
 let currentAlertId = null;
+const ALERTS_PAGE_SIZE = 50;
+let currentPage = 1;
 
 const $ = id => document.getElementById(id);
 
@@ -135,6 +137,17 @@ function getFilteredAlerts() {
 function renderAlerts() {
     renderAlertCounts();
     const filteredAlerts = getFilteredAlerts();
+    const total = filteredAlerts.length;
+    const totalPages = Math.max(1, Math.ceil(total / ALERTS_PAGE_SIZE));
+    // Recalcula também após resolver/recarregar, mantendo a página se ainda existir.
+    currentPage = Math.min(Math.max(1, currentPage), totalPages);
+    const start = (currentPage - 1) * ALERTS_PAGE_SIZE;
+    const end = Math.min(start + ALERTS_PAGE_SIZE, total);
+
+    $("alertsPrevious").disabled = !alertsLoaded || currentPage === 1;
+    $("alertsNext").disabled = !alertsLoaded || currentPage === totalPages;
+    $("alertsRange").textContent = !alertsLoaded ? "—"
+        : total ? `${start + 1}–${end} de ${total}` : "0 de 0";
 
     if (!filteredAlerts.length) {
         $("alertsTable").innerHTML = `
@@ -147,7 +160,8 @@ function renderAlerts() {
         return;
     }
 
-    $("alertsTable").innerHTML = filteredAlerts
+    // Paginação local após todos os filtros, preservando a ordem recebida da API.
+    $("alertsTable").innerHTML = filteredAlerts.slice(start, end)
         .map(alert => `
             <tr>
                 <td>${formatDateTime(alert.dateTime)}</td>
@@ -265,9 +279,24 @@ document.addEventListener("DOMContentLoaded", () => {
     // Carrega dados reais do backend
     loadAlertsFromApi();
 
-    $("alertSearch")?.addEventListener("input", renderAlerts);
-    $("alertSeverity")?.addEventListener("change", renderAlerts);
-    $("alertStatus")?.addEventListener("change", renderAlerts);
+    const resetAlertsPage = () => {
+        currentPage = 1;
+        renderAlerts();
+    };
+    $("alertSearch")?.addEventListener("input", resetAlertsPage);
+    $("alertSeverity")?.addEventListener("change", resetAlertsPage);
+    $("alertStatus")?.addEventListener("change", resetAlertsPage);
+
+    $("alertsPrevious").addEventListener("click", () => {
+        if ($("alertsPrevious").disabled) return;
+        currentPage -= 1;
+        renderAlerts();
+    });
+    $("alertsNext").addEventListener("click", () => {
+        if ($("alertsNext").disabled) return;
+        currentPage += 1;
+        renderAlerts();
+    });
 
     $("closeAlertDetailsModal").addEventListener("click", closeAlertModal);
     $("closeAlertDetailsFooter").addEventListener("click", closeAlertModal);

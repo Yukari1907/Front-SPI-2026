@@ -372,6 +372,11 @@ img{display:block;max-width:100%}
 
 .grid{display:grid;gap:22px}
 
+.monitoring-grid{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+.monitoring-grid > aside{min-width:0}
+.monitoring-grid .camera-list-item{flex-wrap:wrap;gap:8px}
+.monitoring-grid .camera-list-item > span:first-child{min-width:0;overflow-wrap:anywhere}
+
 .kpi-grid{
     grid-template-columns:repeat(4,minmax(0,1fr));
     margin-bottom:26px;
@@ -710,6 +715,7 @@ tbody tr:hover{background:var(--table-hover)}
     .nav a.active::before{display:none}
     .main{width:100%;margin-left:0;padding:22px}
     .charts-grid{grid-template-columns:1fr}
+    .monitoring-grid{grid-template-columns:1fr}
     .topbar{align-items:flex-start;flex-direction:column}
     .top-actions{width:100%}
     .search-global{flex:1}

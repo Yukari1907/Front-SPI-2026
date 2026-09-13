@@ -85,7 +85,7 @@ function renderCameraList(setoresMap) {
     if (!cameraList) return;
 
     cameraList.innerHTML = monitoramentoCameras.map(camera => {
-        const setorNome = setoresMap[camera.id_setor] || `Setor ${camera.id_setor}`;
+        const setorNome = setoresMap[camera.id_setor] || (camera.id_setor != null && camera.id_setor !== "" ? `Setor ${camera.id_setor}` : "");
         const selected = camera.id === currentCameraId;
         return `
             <button
@@ -100,8 +100,8 @@ function renderCameraList(setoresMap) {
             >
                 <span>
                     <i class="fa-solid fa-video"></i>
-                    Câmera ${camera.id}<br>
-                    <small class="text-muted">${escapeHtml(camera.ip)} — ${escapeHtml(setorNome)}</small>
+                    Câmera ${camera.id}
+                    ${setorNome ? `<br><small class="text-muted">${escapeHtml(setorNome)}</small>` : ""}
                 </span>
 
                 <span class="badge" data-camera-status="${camera.id}">Não verificado</span>
@@ -121,8 +121,8 @@ function renderCameraSelect(setoresMap) {
     if (!select) return;
 
     select.innerHTML = monitoramentoCameras.map(camera => {
-        const setorNome = setoresMap[camera.id_setor] || `Setor ${camera.id_setor}`;
-        return `<option value="${camera.id}">Câmera ${camera.id} — ${escapeHtml(setorNome)}</option>`;
+        const setorNome = setoresMap[camera.id_setor] || (camera.id_setor != null && camera.id_setor !== "" ? `Setor ${camera.id_setor}` : "");
+        return `<option value="${camera.id}">Câmera ${camera.id}${setorNome ? ` — ${escapeHtml(setorNome)}` : ""}</option>`;
     }).join("");
 
     select.addEventListener("change", () => {
