@@ -1061,7 +1061,7 @@ tbody tr:hover{background:var(--table-hover)}
 
 .notification-clear-btn:hover{
     background:var(--danger-soft);
-    color:var(--danger);
+    color:var(--text);
     border-color:color-mix(in srgb,var(--danger) 35%,var(--border));
 }
 

@@ -10,6 +10,12 @@ let detectionStatus = 200;
 let alertsStatus = 200;
 let resolveStatus = 200;
 const resolveRequests = [];
+const mutations = [], zoneRequests = [];
+let zonesStatus = 200, createZoneStatus = 201;
+let zoneData = [
+    { id: 1, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.1, largura: 0.3, altura: 0.3, permitido: false },
+    { id: 2, nome: 'Área de carga', id_camera: 1, x: 0.5, y: 0.5, largura: 0.2, altura: 0.2, permitido: true }
+];
 let cameraStatus = 200;
 let cameras = [{ id: 1, nome: 'Entrada', id_setor: 1, status: 'Ativo' }, { id: 2, nome: 'Saída', id_setor: 1, status: 'Desconectado' }, { id: 3, status: 'Inativo' }];
 const monitoringCameras = [
@@ -38,6 +44,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             const url = new URL(route.request().url());
             if (url.port === '5000') {
                 calls.push(url.pathname + url.search);
+                if (!['GET', 'OPTIONS'].includes(route.request().method())) mutations.push(url.pathname);
                 let status = 200, data;
                 if (url.pathname === '/session') data = {};
                 else if (url.pathname === '/cameras/status') {
@@ -46,6 +53,18 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                 }
                 else if (url.pathname === '/cameras') data = cameraListData || cameras.slice(0, 2);
                 else if (url.pathname === '/setores') data = [{ id: 1, nome: 'Produção' }];
+                else if (url.pathname === '/zonas') {
+                    if (zonesStatus === 0) return route.abort('failed');
+                    data = zoneData; status = zonesStatus;
+                }
+                else if (url.pathname === '/zonas/registrar') {
+                    const body = route.request().postDataJSON();
+                    zoneRequests.push({ method: route.request().method(), body });
+                    if (createZoneStatus === 0) return route.abort('failed');
+                    status = createZoneStatus;
+                    data = status === 201 ? { id: zoneData.length + 1, ...body } : { error: 'Falha ao registrar a zona' };
+                    if (status === 201) zoneData.push(data);
+                }
                 else if (url.pathname.startsWith('/zonas/')) data = [];
                 else if (url.pathname.startsWith('/detections/')) { data = detections; status = detectionStatus; }
                 else if (url.pathname.startsWith('/video/')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"/>' });
@@ -72,6 +91,21 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         });
         const page = await context.newPage();
         page.on('pageerror', error => errors.push(error.message));
+        const assertContrast = async locator => {
+            const ratio = await locator.evaluate(el => {
+                const rgb = color => color.match(/[\d.]+/g).slice(0, 3).map(Number);
+                const luminance = color => rgb(color).map(value => {
+                    const s = value / 255;
+                    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+                }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+                let ancestor = el;
+                while (ancestor.parentElement && getComputedStyle(ancestor).backgroundColor === 'rgba(0, 0, 0, 0)') ancestor = ancestor.parentElement;
+                const a = luminance(getComputedStyle(el).color);
+                const b = luminance(getComputedStyle(ancestor).backgroundColor);
+                return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+            });
+            assert(ratio >= 4.5, `Contraste mínimo 4.5:1, obtido ${ratio.toFixed(2)}:1`);
+        };
         await page.goto('http://localhost:8765/monitoramento.html');
         await page.waitForFunction(() => document.getElementById('performanceFps').textContent === '15.0');
         assert.match(await page.locator('#detectionsContainer').innerText(), /sem_capacete.*[\s\S]*0\.0%/);
@@ -182,6 +216,8 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                     }), `Lista sem transbordamento ou sobreposição em ${width}px (${theme})`);
                 }
                 await assertNoCameraConnections();
+                await assertContrast(page.locator('[data-camera-id="2"] > span').first());
+                await assertContrast(page.locator('[data-camera-id="2"] small'));
             }
         }
         await page.setViewportSize({ width: 1440, height: 1000 });
@@ -194,6 +230,53 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.equal(await page.evaluate(() => formatAlertNotification({ evento: 'Alerta', id_camera: 2 })), 'Alerta — Câmera 2');
         assert.equal(await page.evaluate(() => formatAlertNotification({ evento: 'Alerta' })), 'Alerta');
         check('Notificação de queda sem zona, fallback e escape de HTML em nomes');
+
+        const persistedAlerts = structuredClone(alertData);
+        const mutationsBeforeClear = mutations.length;
+        await page.locator('#notificationButton').click();
+        assert.equal(await page.locator('#clearNotificationsButton').innerText(), 'Limpar');
+        await page.evaluate(() => {
+            window.clearCalls = 0;
+            const original = clearRecentAlerts;
+            window.clearRecentAlerts = () => { window.clearCalls++; original(); };
+            ensureNotificationClearButton();
+            for (let index = 0; index < 25; index++) window.socketHandlers.novo_alerta({ evento: `Recente ${index}`, severidade: 3 });
+        });
+        assert.equal(await page.locator('#clearNotificationsButton').count(), 1);
+        assert.equal(await page.locator('#notificationCount').innerText(), '20');
+        for (const theme of ['light', 'dark']) {
+            await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+            await page.mouse.move(0, 0);
+            await page.waitForTimeout(250);
+            await assertContrast(page.locator('#clearNotificationsButton'));
+            await page.locator('#clearNotificationsButton').hover();
+            await page.waitForTimeout(250);
+            await assertContrast(page.locator('#clearNotificationsButton'));
+        }
+        await page.locator('#clearNotificationsButton').click();
+        assert.equal(await page.evaluate(() => window.clearCalls), 1);
+        assert.equal(await page.evaluate(() => getRecentAlerts().length), 0);
+        assert.equal(await page.locator('#notificationCount').innerText(), '0');
+        assert.match(await page.locator('#notificationList').innerText(), /Nenhuma notificação recente/);
+        assert(await page.locator('#notificationPanel').isVisible());
+        await page.locator('#clearNotificationsButton').click();
+        await page.evaluate(() => window.socketHandlers.novo_alerta({ evento: 'Alerta após limpar', severidade: 2 }));
+        assert.equal(await page.locator('#notificationCount').innerText(), '1');
+        assert.match(await page.locator('#notificationList').innerText(), /Alerta após limpar/);
+        assert.equal(mutations.length, mutationsBeforeClear);
+        assert.deepEqual(alertData, persistedAlerts);
+        check('Limpar chama clearRecentAlerts, atualiza painel/contador sem escrita na API, mantém Socket.IO e contraste nos dois temas');
+
+        const notificationPages = fs.readdirSync(front).filter(file => file.endsWith('.html') && fs.readFileSync(path.join(front, file), 'utf8').includes('id="notificationPanel"'));
+        assert(notificationPages.length >= 4);
+        for (const file of notificationPages) {
+            const html = fs.readFileSync(path.join(front, file), 'utf8');
+            assert.match(html, /id="notificationPanel"[^>]*>\s*<div class="section-title">/);
+            for (const id of ['notificationButton', 'notificationList', 'notificationCount']) assert(html.includes(`id="${id}"`), `${file}: ${id}`);
+            for (const src of ['css/components.css', 'js/common.js', 'js/notifications.js', 'socket.io.min.js']) assert(html.includes(src), `${file}: ${src}`);
+            assert(html.indexOf('js/notifications.js') < html.indexOf('js/common.js'));
+        }
+        check(`Estrutura e scripts do painel confirmados nas ${notificationPages.length} páginas de notificações`);
 
         cameraListData = null;
         await page.goto('http://localhost:8765/alertas.html');
@@ -409,6 +492,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.evaluate(() => sessionStorage.clear());
         await page.goto('http://localhost:8765/mapeamento.html');
         await page.waitForFunction(() => document.getElementById('mapCamerasOnline').textContent === '1 câmera online');
+        await page.waitForFunction(() => document.getElementById('riskZonesList').textContent.includes('Prensa hidráulica'));
         assert.equal(await page.locator('#factoryMap > button').count(), 1);
         assert.equal(await page.locator('#factoryMap > button').getAttribute('title'), 'Câmera 1 — IP: local');
         assert.equal(await page.locator('#factoryMap > button').evaluate(el => el.style.background), 'rgb(49, 85, 245)');
@@ -447,6 +531,96 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         }
         await page.setViewportSize({ width: 1440, height: 1000 });
         check('Planta proporcional e ícones clicáveis em desktop, tablet e celular, nos dois temas');
+
+        const mapBeforeCreation = await page.locator('#factoryMap').innerHTML();
+        const sectorsBeforeCreation = await page.locator('#sectorList').innerHTML();
+        assert.match(await page.locator('#openZoneModal').innerText(), /Nova zona/);
+        assert.equal(await page.locator('#zoneModal').isVisible(), false);
+        for (const width of [1440, 768, 390]) {
+            await page.setViewportSize({ width, height: 1000 });
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+                await page.locator('#openZoneModal').click();
+                assert(await page.locator('#zoneModal').isVisible());
+                assert(await page.locator('#zoneCamera').evaluate(el => el === document.activeElement));
+                await assertContrast(page.locator('#zoneName'));
+                const rect = await page.locator('#zoneModal .modal-box').boundingBox();
+                assert(rect.x >= 0 && rect.x + rect.width <= width);
+                await page.locator('#cancelZoneModal').click();
+                assert.equal(await page.locator('#zoneModal').isVisible(), false);
+            }
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        for (const method of ['close', 'backdrop', 'escape']) {
+            await page.locator('#openZoneModal').click();
+            if (method === 'close') await page.locator('#closeZoneModal').click();
+            if (method === 'backdrop') {
+                await page.locator('#zoneModal h2').click();
+                assert(await page.locator('#zoneModal').isVisible());
+                await page.locator('#zoneModal').click({ position: { x: 5, y: 5 } });
+            }
+            if (method === 'escape') await page.keyboard.press('Escape');
+            assert.equal(await page.locator('#zoneModal').isVisible(), false);
+        }
+        check('Nova zona abre e fecha por X, Cancelar, fundo e Escape; modal legível e responsivo nos dois temas');
+
+        await page.locator('#openZoneModal').click();
+        await page.locator('#saveZoneButton').click();
+        assert.equal(zoneRequests.length, 0);
+        await page.locator('#zoneCamera').selectOption('1');
+        await page.locator('#zoneName').fill('  Zona <img src=x onerror=alert(1)>  ');
+        for (const [selector, value] of [['#zoneX', '0.8'], ['#zoneY', '0.2'], ['#zoneWidth', '0.3'], ['#zoneHeight', '0.4']]) await page.locator(selector).fill(value);
+        await page.locator('#saveZoneButton').click();
+        assert.equal(zoneRequests.length, 0);
+        assert.match(await page.locator('#toastContainer').innerText(), /inteiramente dentro do quadro/);
+        await page.locator('#zoneX').fill('0.1');
+        for (const status of [400, 0]) {
+            createZoneStatus = status;
+            const count = zoneRequests.length;
+            await page.locator('#saveZoneButton').click();
+            await page.waitForFunction(() => !document.getElementById('saveZoneButton').disabled);
+            assert.equal(zoneRequests.length, count + 1);
+            assert(await page.locator('#zoneModal').isVisible());
+            assert.equal(await page.locator('#zoneCamera').inputValue(), '1');
+            assert.equal(zoneData.length, 2);
+        }
+        createZoneStatus = 201;
+        await page.locator('#saveZoneButton').click();
+        await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active') && document.getElementById('riskZonesList').textContent.includes('Zona <img'));
+        assert.deepEqual(zoneRequests.at(-1), { method: 'POST', body: {
+            id_camera: 1, nome: 'Zona <img src=x onerror=alert(1)>', x: 0.1, y: 0.2, largura: 0.3, altura: 0.4, permitido: false
+        } });
+        assert.equal(await page.locator('#riskZonesList img').count(), 0);
+        assert.equal(await page.locator('#zoneName').inputValue(), '');
+        await page.locator('#openZoneModal').click();
+        await page.locator('#zoneCamera').selectOption('1');
+        await page.locator('#zoneName').fill('Passagem permitida');
+        await page.locator('#zoneAllowed').check();
+        await page.locator('#saveZoneButton').click();
+        await page.waitForFunction(() => document.getElementById('riskZonesList').textContent.includes('Passagem permitida'));
+        assert.equal(zoneRequests.at(-1).body.permitido, true);
+        assert.equal(await page.locator('#riskZonesList .badge.success').count(), 2);
+        assert.equal(await page.locator('#factoryMap').innerHTML(), mapBeforeCreation);
+        assert.equal(await page.locator('#sectorList').innerHTML(), sectorsBeforeCreation);
+        assert.equal(await page.locator('#mapCamerasOnline').innerText(), '1 câmera online');
+        assert.match(await page.locator('#factoryMap').evaluate(el => getComputedStyle(el).backgroundImage), /planta-fabrica\.png/);
+        check('Cadastro valida campos/limites, trata HTTP 400 e rede, envia tipos corretos, recarrega zonas e preserva planta/câmeras/setores/online');
+
+        const savedZones = zoneData;
+        for (const [status, data, expected] of [
+            [200, [], /Nenhuma zona cadastrada/],
+            [500, [], /Não foi possível carregar/],
+            [0, [], /Não foi possível carregar/],
+            [200, {}, /Não foi possível carregar/],
+            [200, savedZones, /Prensa hidráulica[\s\S]*Área de carga[\s\S]*Passagem permitida/]
+        ]) {
+            zonesStatus = status; zoneData = data;
+            await page.evaluate(() => loadRiskZones());
+            assert.match(await page.locator('#riskZonesList').innerText(), expected);
+            assert.equal(await page.locator('#factoryMap').innerHTML(), mapBeforeCreation);
+            assert.equal(await page.locator('#sectorList').innerHTML(), sectorsBeforeCreation);
+        }
+        check('Listagem de zonas distingue vazio, erro HTTP, rede e formato inválido e recupera sem afetar o mapa');
 
         await page.waitForFunction(() => !!window.socketHandlers.novo_alerta);
         await page.evaluate(() => window.socketHandlers.novo_alerta({ evento: 'Possível queda', severidade: 3, id_camera: 1, nome_camera: 'Entrada', nome_setor: 'Produção', tipo_deteccao: 'queda', id_zona: null }));
