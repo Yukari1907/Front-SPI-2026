@@ -374,7 +374,7 @@ img{display:block;max-width:100%}
 
 .monitoring-grid{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
 .monitoring-grid > aside{min-width:0}
-.monitoring-grid .camera-list-item{flex-wrap:wrap;gap:8px}
+.monitoring-grid .camera-list-item{flex-wrap:wrap;gap:8px;color:var(--text)}
 .monitoring-grid .camera-list-item > span:first-child{min-width:0;overflow-wrap:anywhere}
 
 .kpi-grid{
