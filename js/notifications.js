@@ -94,6 +94,15 @@ function getRecentAlerts() {
     return recentAlerts;
 }
 
+/**
+ * Limpa apenas as notificações recentes mantidas no frontend.
+ * Não exclui os alertas persistidos no backend.
+ */
+function clearRecentAlerts() {
+    recentAlerts = [];
+}
+
 window.initNotifications = initNotifications;
 window.onAlert = onAlert;
 window.getRecentAlerts = getRecentAlerts;
+window.clearRecentAlerts = clearRecentAlerts;

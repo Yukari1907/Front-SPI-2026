@@ -75,14 +75,159 @@
         </article>
 
         <article class="card">
-            <div class="section-title"><h2>Zonas de Risco</h2></div>
-            <span class="badge danger">Prensa hidráulica</span>
-            <span class="badge warning" style="margin-left:8px">Área de carga</span>
+            <div class="section-title">
+                <h2>Zonas de Risco</h2>
+                <button class="btn" id="openZoneModal" type="button">
+                    <i class="fa-solid fa-plus"></i>
+                    Nova zona
+                </button>
+            </div>
+
+            <div id="riskZonesList">
+                <p class="text-muted">Carregando zonas cadastradas...</p>
+            </div>
         </article>
     </aside>
 </div>
 
     </main>
+
+
+<div class="modal" id="zoneModal">
+    <div class="modal-box" style="width:min(760px,96vw)">
+        <button
+            class="modal-close"
+            id="closeZoneModal"
+            type="button"
+            aria-label="Fechar"
+        >
+            &times;
+        </button>
+
+        <div class="page-title" style="margin-bottom:20px">
+            <h2>Criar nova zona</h2>
+            <p class="text-muted">
+                Defina a câmera, o nome e a posição da zona no quadro de vídeo.
+                As coordenadas devem ficar entre 0 e 1.
+            </p>
+        </div>
+
+        <form id="zoneForm">
+            <div class="modal-grid">
+                <div class="form-group">
+                    <label for="zoneCamera">Câmera</label>
+                    <select id="zoneCamera" name="id_camera" required>
+                        <option value="">Selecione uma câmera</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="zoneName">Nome da zona</label>
+                    <input
+                        id="zoneName"
+                        name="nome"
+                        type="text"
+                        maxlength="100"
+                        placeholder="Ex.: Área da prensa"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="zoneX">X</label>
+                    <input
+                        id="zoneX"
+                        name="x"
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value="0.10"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="zoneY">Y</label>
+                    <input
+                        id="zoneY"
+                        name="y"
+                        type="number"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value="0.10"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="zoneWidth">Largura</label>
+                    <input
+                        id="zoneWidth"
+                        name="largura"
+                        type="number"
+                        min="0.01"
+                        max="1"
+                        step="0.01"
+                        value="0.30"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="zoneHeight">Altura</label>
+                    <input
+                        id="zoneHeight"
+                        name="altura"
+                        type="number"
+                        min="0.01"
+                        max="1"
+                        step="0.01"
+                        value="0.30"
+                        required
+                    >
+                </div>
+            </div>
+
+            <label
+                style="
+                    display:flex;
+                    align-items:center;
+                    gap:10px;
+                    margin-top:18px;
+                    padding:14px;
+                    border:1px solid var(--border);
+                    border-radius:11px;
+                    background:var(--surface-soft);
+                "
+            >
+                <input id="zoneAllowed" name="permitido" type="checkbox">
+                <span>
+                    <strong>Zona permitida</strong><br>
+                    <small class="text-muted">
+                        Desmarcada = área restrita / de risco.
+                    </small>
+                </span>
+            </label>
+
+            <div class="modal-footer">
+                <button
+                    class="btn secondary"
+                    id="cancelZoneModal"
+                    type="button"
+                >
+                    Cancelar
+                </button>
+
+                <button class="btn" id="saveZoneButton" type="submit">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Criar zona
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
     <div id="toastContainer" class="toast-container"></div>
 </body>
