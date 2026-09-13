@@ -7,6 +7,7 @@
  * API utilizada:
  *   GET /setores  → listar setores
  *   GET /cameras  → listar câmeras (com id_setor para agrupamento)
+ *   GET /cameras/status → contar câmeras com status Ativo
  *
  * Nota: O backend não retorna coordenadas X/Y para o mapa visual.
  * As câmeras são posicionadas automaticamente de forma distribuída no canvas.
@@ -44,6 +45,22 @@ let mappingZones = [];
 // TTL curto (45s) — sobrevive à navegação entre páginas via sessionStorage,
 // mas não serve dado desatualizado por muito tempo após um cadastro novo.
 const CAMERAS_SETORES_CACHE_TTL_MS = 45000;
+
+async function loadMapCamerasOnline() {
+    const badge = document.getElementById("mapCamerasOnline");
+    if (!badge) return;
+
+    badge.textContent = "— câmeras online";
+    badge.classList.remove("success");
+
+    // Mesmo critério do dashboard, sem cache para o status de conexão.
+    const result = await apiGet("/cameras/status");
+    if (!result.ok || !Array.isArray(result.data)) return;
+
+    const online = result.data.filter(camera => camera.status === "Ativo").length;
+    badge.textContent = `${online} câmera${online !== 1 ? "s" : ""} online`;
+    badge.classList.toggle("success", online > 0);
+}
 
 async function loadMapeamento() {
     try {
@@ -153,11 +170,8 @@ function renderFactoryMap(camerasResult) {
 // ─────────────────────────────────────────────
 // Indicador de alerta em tempo real (genérico)
 // ─────────────────────────────────────────────
-// O payload do WebSocket (ver CONTRATO_INTEGRACAO.md) só tem
-// {id_monitorar, id_usuario, evento, severidade} — sem id_camera — então não
-// dá para acender o ícone da câmera específica no mapa a partir do evento.
-// Enquanto isso não mudar no backend, mostramos só que HOUVE alerta recente,
-// sem apontar para uma câmera exata.
+// Mantém o aviso genérico de alerta recente. O contrato atual inclui id_camera,
+// mas a associação visual do alerta a uma câmera fica para uma próxima etapa.
 
 let mapAlertCount = 0;
 let mapAlertConfigured = false;
@@ -209,4 +223,5 @@ function renderMapAlertIndicator(alerta) {
 document.addEventListener("DOMContentLoaded", () => {
     configureZoneCreation();
     loadMapeamento();
+    loadMapCamerasOnline();
 });
