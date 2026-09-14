@@ -399,6 +399,20 @@ function renderZonasOverlay() {
 // ─────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
+    const datasetReviewLink = document.getElementById("datasetReviewLink");
+
+    if (datasetReviewLink) {
+        // Define o href completo com a base do backend
+        const targetUrl = `${window.API_BASE_URL}/curadoria`;
+        datasetReviewLink.href = targetUrl;
+
+        datasetReviewLink.addEventListener("click", (e) => {
+            e.preventDefault();
+            // Abre o site da curadoria servido pelo Flask em nova aba
+            window.open(targetUrl, "_blank", "noopener,noreferrer");
+        });
+    }
+    
     loadMonitoramento();
 });
 
