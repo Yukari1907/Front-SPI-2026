@@ -1,0 +1,38 @@
+.mapping-grid{
+    grid-template-columns:minmax(0,2fr) minmax(0,1fr);
+    align-items:start;
+}
+
+.mapping-grid .section-title{
+    flex-wrap:wrap;
+}
+
+#factoryMap{
+    position:relative;
+    isolation:isolate;
+    width:100%;
+    aspect-ratio:3 / 2;
+    border:1px solid var(--border);
+    border-radius:14px;
+    background:var(--surface-soft) url("../assets/images/planta-fabrica.png") center / contain no-repeat;
+    overflow:hidden;
+}
+
+/* O fundo permanece abaixo dos ícones e não intercepta cliques. */
+#factoryMap > button{
+    z-index:1;
+}
+
+#factoryMap > div:not(#mapAlertIndicator){
+    z-index:1;
+    padding:12px;
+    border-radius:12px;
+    background:var(--surface);
+    color:var(--muted);
+}
+
+@media(max-width:960px){
+    .mapping-grid{
+        grid-template-columns:minmax(0,1fr);
+    }
+}

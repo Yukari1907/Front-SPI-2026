@@ -7,6 +7,7 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
     <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/mapeamento.css">
     
 
     <script src="js/api.js"></script>
@@ -57,14 +58,14 @@
         </div>
 
         
-<div class="grid" style="grid-template-columns:2fr 1fr">
+<div class="grid mapping-grid">
     <article class="card">
         <div class="section-title">
             <h2>Planta da Fábrica</h2>
-            <span class="badge success">12 câmeras online</span>
+            <span id="mapCamerasOnline" class="badge" role="status">— câmeras online</span>
         </div>
 
-        <div id="factoryMap" style="position:relative;min-height:560px;border:1px dashed var(--border);border-radius:14px;background:linear-gradient(135deg,var(--primary-soft),var(--surface-soft));overflow:hidden"></div>
+        <div id="factoryMap" aria-label="Planta da fábrica com localização ilustrativa das câmeras"></div>
     </article>
 
     <aside class="grid" style="align-content:start">
