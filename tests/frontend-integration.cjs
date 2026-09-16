@@ -7,6 +7,8 @@ const stage = front;
 const errors = [], calls = [], passed = [];
 let detections = { connected: true, fps: 15, latencia_ms: 46, class_count: { sem_capacete: 1, pessoa: 2 }, detections: [{ label: 'sem_capacete', confidence: 0 }] };
 let detectionStatus = 200;
+let streamDimensions = [640, 360], streamStatus = 200, streamGate = null;
+let monitoringZones = [];
 let alertsStatus = 200;
 let resolveStatus = 200;
 const resolveRequests = [];
@@ -27,6 +29,8 @@ const monitoringCameras = [
     { id: 6, id_setor: 9, ip: '10.20.30.46' }
 ];
 let cameraListData = monitoringCameras;
+let cameraListStatus = 200, sectorsStatus = 200;
+let sectorData = [{ id: 1, nome: 'Produção' }];
 let alertData = [
     { id: 1, data: '2026-09-11 09:00:00', evento: 'capacete', severidade: 1, resolvido: false, id_camera: 1 },
     { id: 2, data: '2026-09-11 10:00:00', evento: 'luva', severidade: 3, resolvido: false, id_camera: 2 },
@@ -51,8 +55,14 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                     if (cameraStatus === 0) return route.abort('failed');
                     data = cameras; status = cameraStatus;
                 }
-                else if (url.pathname === '/cameras') data = cameraListData || cameras.slice(0, 2);
-                else if (url.pathname === '/setores') data = [{ id: 1, nome: 'Produção' }];
+                else if (url.pathname === '/cameras') {
+                    if (cameraListStatus === 0) return route.abort('failed');
+                    data = cameraListData || cameras.slice(0, 2); status = cameraListStatus;
+                }
+                else if (url.pathname === '/setores') {
+                    if (sectorsStatus === 0) return route.abort('failed');
+                    data = sectorData; status = sectorsStatus;
+                }
                 else if (url.pathname === '/zonas') {
                     if (zonesStatus === 0) return route.abort('failed');
                     data = zoneData; status = zonesStatus;
@@ -65,9 +75,15 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                     data = status === 201 ? { id: zoneData.length + 1, ...body } : { error: 'Falha ao registrar a zona' };
                     if (status === 201) zoneData.push(data);
                 }
-                else if (url.pathname.startsWith('/zonas/')) data = [];
+                else if (url.pathname.startsWith('/zonas/')) data = monitoringZones;
                 else if (url.pathname.startsWith('/detections/')) { data = detections; status = detectionStatus; }
-                else if (url.pathname.startsWith('/video/')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"/>' });
+                else if (url.pathname.startsWith('/video/')) {
+                    const [width, height] = streamDimensions;
+                    const status = streamStatus;
+                    if (streamGate) await streamGate;
+                    if (status !== 200) return route.fulfill({ status, body: '' });
+                    return route.fulfill({ headers: { 'Cache-Control': 'no-store' }, contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#306090"/><rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="none" stroke="white"/></svg>` });
+                }
                 else if (url.pathname.startsWith('/alertas/estatisticas')) data = [];
                 else if (/\/alertas\/\d+\/resolvido/.test(url.pathname)) {
                     resolveRequests.push({ path: url.pathname, method: route.request().method(), body: route.request().postData() });
@@ -149,6 +165,125 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.equal(await page.locator('[data-camera-id="2"]').evaluate(el => el.style.background), 'transparent');
         await assertNoCameraConnections();
         check('Clique na lista e dropdown sincronizam seleção, destaque, stream e detecções por ID');
+
+        // Imagens estáticas do mock ficam no cache de imagens do navegador, mesmo
+        // com no-store. Só no teste, diferencia cada conexão simulada ao MJPEG.
+        await page.evaluate(() => {
+            window.originalVideoUrl = apiVideoUrl;
+            let connection = 0;
+            window.apiVideoUrl = id => `${window.originalVideoUrl(id)}?fixture=${++connection}`;
+        });
+        const assertStreamGeometry = async dimensions => {
+            await page.waitForFunction(([width, height]) => {
+                const img = document.getElementById('videoStream');
+                return img?.naturalWidth === width && img.naturalHeight === height;
+            }, dimensions).catch(async error => {
+                const actual = await page.locator('#videoStream').evaluate(img => [img.naturalWidth, img.naturalHeight, img.currentSrc]);
+                throw new Error(`Dimensões esperadas ${dimensions}; recebidas ${actual}`, { cause: error });
+            });
+            const geometry = await page.evaluate(() => {
+                const img = document.getElementById('videoStream');
+                const rect = el => {
+                    const { x, y, width, height } = el.getBoundingClientRect();
+                    return { x, y, width, height };
+                };
+                return {
+                    image: rect(img),
+                    layers: ['videoContainer', 'streamWrapper', 'zonasOverlay'].map(id => rect(document.getElementById(id))),
+                    zone: rect(document.querySelector('#zonasOverlay rect')),
+                    card: rect(document.querySelector('.monitoring-grid > .card')),
+                    fit: getComputedStyle(img).objectFit,
+                    transform: getComputedStyle(img).transform,
+                    viewport: [innerWidth, innerHeight], scrollWidth: document.documentElement.scrollWidth
+                };
+            });
+            const { image, layers, zone, card, viewport } = geometry;
+            const close = (actual, expected) => assert(Math.abs(actual - expected) < 1, `${actual} ≈ ${expected}`);
+            assert(image.width > 0 && image.height > 0);
+            close(image.width, image.height * dimensions[0] / dimensions[1]);
+            for (const layer of layers) for (const key of ['x', 'y', 'width', 'height']) close(layer[key], image[key]);
+            close(image.x + image.width / 2, card.x + card.width / 2);
+            close(zone.x, image.x + image.width * 0.1);
+            close(zone.y, image.y + image.height * 0.1);
+            close(zone.width, image.width * 0.3);
+            close(zone.height, image.height * 0.3);
+            assert(image.x >= card.x && image.x + image.width <= card.x + card.width);
+            assert(image.height <= viewport[1] * 0.75 + 1);
+            assert(image.width <= dimensions[0] + 1 && image.height <= dimensions[1] + 1);
+            assert(geometry.scrollWidth <= viewport[0]);
+            assert.equal(geometry.fit, 'contain');
+            assert.equal(geometry.transform, 'none');
+        };
+        monitoringZones = [zoneData[0]];
+        for (const width of [1440, 768, 390]) {
+            await page.setViewportSize({ width, height: width === 390 ? 700 : 1000 });
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+                for (const dimensions of [[1920, 1080], [1080, 1920], [1280, 720], [720, 1280], [640, 480], [1000, 1000], [853, 479]]) {
+                    streamDimensions = dimensions;
+                    const cameraId = await page.locator('#cameraSelect').inputValue() === '1' ? '2' : '1';
+                    await page.locator('#cameraSelect').selectOption(cameraId);
+                    await page.waitForFunction(id => document.querySelector(`[data-camera-status="${id}"]`).textContent === 'Conectada', cameraId);
+                    await page.waitForSelector('#zonasOverlay rect', { state: 'attached' });
+                    await assertStreamGeometry(dimensions);
+                    assert.equal(await page.evaluate(() => String(currentCameraId)), cameraId);
+                    assert.match(await page.locator('#videoStream').getAttribute('src'), new RegExp(`/video/${cameraId}\\?fixture=\\d+$`));
+                    await assertNoCameraConnections();
+                }
+                streamStatus = 503;
+                await page.evaluate(() => renderVideoStream(currentCameraId));
+                await page.waitForSelector('#videoContainer .stream-placeholder');
+                assert.match(await page.locator('#videoContainer').innerText(), /Stream de vídeo indisponível/);
+                assert.equal(await page.locator('#zonasOverlay').count(), 0);
+                assert(await page.locator('#videoContainer').evaluate(el => {
+                    const rect = el.getBoundingClientRect();
+                    return rect.width > 0 && rect.left >= 0 && rect.right <= innerWidth
+                        && rect.height <= innerHeight && document.documentElement.scrollWidth <= innerWidth;
+                }));
+                await assertContrast(page.locator('#videoContainer .stream-placeholder'));
+                streamStatus = 200;
+                check(`Frames completos, zonas alinhadas, trocas de orientação e indisponibilidade em ${width}px (${theme})`);
+            }
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        streamDimensions = [1080, 1920];
+        let releaseStream;
+        streamGate = new Promise(resolve => { releaseStream = resolve; });
+        await page.evaluate(() => renderVideoStream(currentCameraId));
+        assert.equal(await page.locator('#videoStream').evaluate(img => img.naturalWidth), 0);
+        assert.equal(await page.locator('#videoStream').evaluate(img => getComputedStyle(img).aspectRatio), 'auto');
+        assert.equal(await page.locator('#videoContainer').evaluate(el => getComputedStyle(el).aspectRatio), 'auto');
+        releaseStream(); streamGate = null;
+        await page.waitForSelector('#zonasOverlay rect', { state: 'attached' });
+        await assertStreamGeometry(streamDimensions);
+        for (const viewport of [{ width: 390, height: 700 }, { width: 768, height: 500 }, { width: 1440, height: 1000 }]) {
+            await page.setViewportSize(viewport);
+            await assertStreamGeometry(streamDimensions);
+        }
+        check('Carregamento sem proporção fictícia, recuperação e resize sem recarregar o stream');
+
+        await page.evaluate(async () => {
+            const original = apiGet;
+            const oldImage = document.getElementById('videoStream');
+            let resolve;
+            window.apiGet = () => new Promise(done => { resolve = done; });
+            const oldZones = fetchZonas(currentCameraId);
+            window.apiGet = original;
+            selectCamera(currentCameraId === 1 ? 2 : 1);
+            selectCamera(currentCameraId === 1 ? 2 : 1);
+            handleStreamError(oldImage);
+            resolve({ ok: true, data: [{ id: 999, nome: 'Zona antiga', x: 0, y: 0, largura: 1, altura: 1 }] });
+            await oldZones;
+        });
+        await page.waitForSelector('#zonasOverlay rect', { state: 'attached' });
+        await assertStreamGeometry(streamDimensions);
+        assert.equal(await page.locator('#zonasOverlay [data-id="999"]').count(), 0);
+        assert.equal(await page.locator('#zonasOverlay [data-id="1"]').count(), 1);
+        check('Erro de imagem e zonas atrasadas ignorados após troca rápida A → B → A');
+        monitoringZones = [];
+        streamDimensions = [640, 360];
+        await page.evaluate(() => { window.apiVideoUrl = window.originalVideoUrl; delete window.originalVideoUrl; });
+        await page.locator('#cameraSelect').selectOption('1');
 
         await page.evaluate(() => renderDetectionState({ connected: true, detections: [], class_count: { pessoa: 1 }, fps: 90, latencia_ms: 800 }));
         assert.equal(await page.locator('#performanceFpsBar').evaluate(el => el.style.width), '100%');
@@ -318,7 +453,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             assert.equal(await page.locator('#alertsPrevious').isDisabled(), previousDisabled);
             assert.equal(await page.locator('#alertsNext').isDisabled(), nextDisabled);
             assert.equal(await page.locator('#alertsTable button').count(), expected.length);
-            assert.deepEqual(await page.locator('#alertsTable tr:has(button) td:nth-child(3)').allTextContents(), expected.map(alert => alert.evento));
+            assert.deepEqual(await page.locator('#alertsTable tr:has(button) td:nth-child(4)').allTextContents(), expected.map(alert => alert.evento));
         };
         const resetAlertFilters = async () => {
             await page.locator('#alertSearch').fill('');
@@ -327,21 +462,105 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         };
 
         alertsStatus = 200;
+        const savedLocations = { zones: zoneData, cameras: cameraListData, sectors: sectorData };
+        zoneData = [
+            { id: 1, nome: 'Zona 1', id_camera: 1 },
+            { id: 2, nome: 'Área de inspeção', id_camera: 2 },
+            { id: 3, nome: null, id_camera: 3 },
+            { id: 4, nome: 'Zona sem câmera', id_camera: 404 },
+            { id: 5, nome: '   ', id_camera: 5 },
+            { id: 6, nome: '<img src=x onerror=alert(1)>', id_camera: 6 }
+        ];
+        cameraListData = [
+            { id: 1, nome: 'Entrada', id_setor: 7 },
+            { id: 2, nome: 'Inspeção', id_setor: 8 },
+            { id: 3, nome: null, id_setor: 9 },
+            { id: 5, nome: 'Câmera sem setor', id_setor: 404 },
+            { id: 6, nome: 'Saída', id_setor: 10 }
+        ];
+        sectorData = [
+            { id: 7, nome: 'Produção' }, { id: 8, nome: 'Inspeção final' },
+            { id: 9, nome: null }, { id: 10, nome: '<b>Setor cadastrado</b>' }
+        ];
+        alertData = makeAlerts(8).map((alert, index) => ({
+            ...alert,
+            id_zona: index === 6 ? null : index === 7 ? 404 : index + 1,
+            id_camera: index === 1 ? null : index === 6 ? 1 : index === 7 ? 404 : index + 1
+        }));
+        await resetAlertFilters();
+        await page.evaluate(() => loadAlertsFromApi());
+        assert.deepEqual(await page.locator('.table-wrap th').allTextContents(), ['Data/Hora', 'Setor', 'Zona', 'Evento', 'Severidade', 'Status', 'Ação']);
+        const locationCells = () => page.locator('#alertsTable tr:has(button)').evaluateAll(rows => rows.map(row => [row.cells[1].textContent, row.cells[2].textContent]));
+        assert.deepEqual(await locationCells(), [
+            ['Produção', 'Zona 1'], ['Inspeção final', 'Área de inspeção'],
+            ['—', '—'], ['—', 'Zona sem câmera'], ['—', '—'],
+            ['<b>Setor cadastrado</b>', '<img src=x onerror=alert(1)>'], ['Produção', '—'], ['—', '—']
+        ]);
+        assert.equal(await page.locator('#alertsTable img, #alertsTable b').count(), 0);
+        await page.locator('#alertsTable button').first().click();
+        assert.equal(await page.locator('#alertDetailSector').innerText(), 'Produção');
+        assert.equal(await page.locator('#alertDetailZone').innerText(), 'Zona 1');
+        assert.equal(await page.locator('#alertDetailCamera').innerText(), 'Entrada');
+        await page.locator('#closeAlertDetailsModal').click();
+        check('Setor/Zona separados, vínculos zona→câmera→setor e câmera→setor, nomes reais no modal, ausências neutras e escape de HTML');
+
+        for (const [term, ids] of [['producao', [1, 7]], ['zona 1', [1]], ['area de inspecao', [2]], ['zona 404', []], ['setor 404', []], ['—', []]]) {
+            await page.locator('#alertSearch').fill(term);
+            await assertAlertPage(alertData.filter(alert => ids.includes(alert.id)), ids.length ? `1–${ids.length} de ${ids.length}` : '0 de 0', true, true);
+        }
+        await resetAlertFilters();
+        const locationCounts = await page.locator('.kpi strong').allTextContents();
+        for (const status of [500, 0, 404]) {
+            sectorsStatus = status;
+            await page.evaluate(() => loadAlertsFromApi());
+            assert((await locationCells()).every(([sector]) => sector === '—'));
+            assert.equal((await locationCells())[0][1], 'Zona 1');
+            await assertAlertPage(alertData, '1–8 de 8', true, true);
+            assert.deepEqual(await page.locator('.kpi strong').allTextContents(), locationCounts);
+        }
+        sectorsStatus = 200;
+        const realSectors = sectorData;
+        for (const invalid of [[], {}, [null], [{ id: 7, nome: '   ' }]]) {
+            sectorData = invalid;
+            await page.evaluate(() => loadAlertsFromApi());
+            assert((await locationCells()).every(([sector]) => sector === '—'));
+        }
+        sectorData = realSectors;
+        for (const status of [500, 0]) {
+            cameraListStatus = status;
+            await page.evaluate(() => loadAlertsFromApi());
+            assert((await locationCells()).every(([sector]) => sector === '—'));
+            assert.equal((await locationCells())[0][1], 'Zona 1');
+            cameraListStatus = 200;
+            zonesStatus = status;
+            await page.evaluate(() => loadAlertsFromApi());
+            assert((await locationCells()).every(([, zone]) => zone === '—'));
+            assert.equal((await locationCells())[0][0], 'Produção');
+            assert.equal((await locationCells())[1][0], '—');
+            zonesStatus = 200;
+        }
+        await page.evaluate(() => loadAlertsFromApi());
+        assert.deepEqual((await locationCells())[0], ['Produção', 'Zona 1']);
+        check('Busca somente por nomes existentes; falhas parciais, cadastro inválido/vazio e recuperação preservam alertas e cards');
+        zoneData = savedLocations.zones;
+        cameraListData = savedLocations.cameras;
+        sectorData = savedLocations.sectors;
+
         for (const count of [0, 1, 49, 50, 51, 100, 101, 120]) {
             alertData = makeAlerts(count);
             await resetAlertFilters();
             await page.evaluate(() => loadAlertsFromApi());
-            const loadedCalls = alertsCalls();
+            const loadedCalls = calls.length;
             await assertAlertPage(alertData.slice(0, 50), count ? `1–${Math.min(50, count)} de ${count}` : '0 de 0', true, count <= 50);
             await page.locator('#alertsPrevious').dispatchEvent('click');
             assert.equal(await page.evaluate(() => currentPage), 1);
             if (!count) assert.match(await page.locator('#alertsTable').innerText(), /Nenhum alerta encontrado/);
-            const seenEvents = await page.locator('#alertsTable tr:has(button) td:nth-child(3)').allTextContents();
+            const seenEvents = await page.locator('#alertsTable tr:has(button) td:nth-child(4)').allTextContents();
             for (let start = 50; start < count; start += 50) {
                 await page.locator('#alertsNext').click();
                 const end = Math.min(start + 50, count);
                 await assertAlertPage(alertData.slice(start, end), `${start + 1}–${end} de ${count}`, false, end === count);
-                seenEvents.push(...await page.locator('#alertsTable tr:has(button) td:nth-child(3)').allTextContents());
+                seenEvents.push(...await page.locator('#alertsTable tr:has(button) td:nth-child(4)').allTextContents());
             }
             assert.deepEqual(seenEvents, alertData.map(alert => alert.evento));
             const lastPage = Math.max(1, Math.ceil(count / 50));
@@ -352,13 +571,16 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                 const start = (number - 1) * 50;
                 await assertAlertPage(alertData.slice(start, start + 50), `${start + 1}–${start + 50} de ${count}`, number === 1, false);
             }
-            assert.equal(alertsCalls(), loadedCalls);
+            assert.equal(calls.length, loadedCalls);
             check(`Paginação com ${count} alertas: intervalos, limites, ordem, ida/volta e nenhuma consulta adicional`);
         }
 
         alertData = makeAlerts(120).map((alert, index) => ({
             ...alert, severidade: index < 73 ? 3 : index < 90 ? 2 : 1, resolvido: index >= 103
         }));
+        zoneData = [...savedLocations.zones, { id: 120, nome: 'Expedição de peças', id_camera: 120 }];
+        cameraListData = [...cameras, { id: 120, nome: 'Portão leste', id_setor: 120 }];
+        sectorData = [...savedLocations.sectors, { id: 120, nome: 'Logística' }];
         await page.evaluate(() => loadAlertsFromApi());
         const filterCalls = alertsCalls();
         await page.locator('#alertsNext').click();
@@ -377,8 +599,8 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await assertAlertPage([], '0 de 0', true, true);
         assert.match(await page.locator('#alertsTable').innerText(), /Nenhum alerta encontrado com os filtros selecionados/);
         await page.locator('#alertStatus').selectOption('');
-        // Os quatro campos buscados pertencem a um registro fora da primeira página.
-        for (const term of ['  OCORRENCIA 120 ', 'zona 120', 'camera 120', 'usuario 120']) {
+        // Os nomes cadastrados pertencem a um registro fora da primeira página.
+        for (const term of ['  OCORRENCIA 120 ', 'expedicao de pecas', 'logistica', 'portao leste', 'usuario 120']) {
             await page.locator('#alertSearch').fill('');
             await page.locator('#alertsNext').click();
             await page.locator('#alertSearch').fill(term);
@@ -392,6 +614,9 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['73', '17', '30', '17']);
         assert.equal(alertsCalls(), filterCalls);
         check('Todos os filtros reiniciam na página 1; busca global à coleção, normalização, combinação e cards preservados');
+        zoneData = savedLocations.zones;
+        cameraListData = savedLocations.cameras;
+        sectorData = savedLocations.sectors;
 
         await resetAlertFilters();
         alertData = makeAlerts(101);
@@ -445,6 +670,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             await assertAlertPage([], range, true, true);
             assert.deepEqual(await page.locator('.kpi strong').allTextContents(), Array(4).fill(range === '—' ? '—' : '0'));
             assert.match(await page.locator('#alertsTable').innerText(), range === '—' ? /Não foi possível carregar/ : /Nenhum alerta encontrado/);
+            assert.equal(await page.locator('#alertsTable td').getAttribute('colspan'), '7');
         }
         check('Paginação distingue 404/lista vazia, HTTP 500, falha de rede e resposta inválida');
 
@@ -455,6 +681,21 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             await page.setViewportSize({ width, height: 1000 });
             for (const theme of ['light', 'dark']) {
                 await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+                await page.mouse.move(0, 0);
+                await page.waitForTimeout(250);
+                for (const selector of ['.table-wrap th:nth-child(2)', '.table-wrap th:nth-child(3)', '#alertsTable tr:first-child td:nth-child(2)', '#alertsTable tr:first-child td:nth-child(3)']) {
+                    await assertContrast(page.locator(selector));
+                }
+                assert(await page.locator('.table-wrap').evaluate(el => {
+                    const rect = el.getBoundingClientRect();
+                    return rect.left >= 0 && rect.right <= innerWidth && el.clientWidth > 0
+                        && document.documentElement.scrollWidth <= innerWidth
+                        && getComputedStyle(el).overflowX === 'auto';
+                }));
+                await page.locator('#alertsTable button').first().scrollIntoViewIfNeeded();
+                await page.locator('#alertsTable button').first().click();
+                assert(await page.locator('#alertDetailsModal').isVisible());
+                await page.locator('#closeAlertDetailsModal').click();
                 await page.locator('#alertsRange').scrollIntoViewIfNeeded();
                 for (const selector of ['#alertsRange', '#alertsPrevious', '#alertsNext']) {
                     const rect = await page.locator(selector).boundingBox();

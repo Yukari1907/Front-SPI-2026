@@ -165,35 +165,18 @@ function renderVideoStream(cameraId) {
 
     const streamUrl = apiVideoUrl(cameraId);
 
-    // Cria a camada de vídeo + overlay SVG perfeitamente alinhados
+    // O CSS dimensiona o wrapper pela imagem, sem presumir a proporção da câmera.
+    currentCameraZonas = [];
     container.innerHTML = `
-        <div id="streamWrapper" style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+        <div id="streamWrapper">
             <img
                 id="videoStream"
                 src="${streamUrl}"
-                alt="Stream câmera ${cameraId}"
-                style="
-                    width: 100%;
-                    max-height: 520px;
-                    object-fit: contain;
-                    border-radius: 8px;
-                    background: #000;
-                    display: block;
-                "
+                alt="Carregando stream da câmera ${cameraId}"
                 onerror="handleStreamError(this)"
             >
             <!-- SVG sobreposto ao frame -->
-            <svg 
-                id="zonasOverlay" 
-                style="
-                    position: absolute;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    pointer-events: none;
-                "
-            ></svg>
+            <svg id="zonasOverlay"></svg>
         </div>
     `;
 
@@ -202,17 +185,12 @@ function renderVideoStream(cameraId) {
 }
 
 function handleStreamError(img) {
+    if (img !== document.getElementById("videoStream")) return;
     img.onerror = null; // Previne loop infinito
     const container = document.getElementById("videoContainer");
     if (container) {
         container.innerHTML = `
-            <div style="
-                padding:48px;
-                text-align:center;
-                color:var(--text-muted);
-                background:var(--surface);
-                border-radius:8px;
-            ">
+            <div class="stream-placeholder">
                 <i class="fa-solid fa-video-slash" style="font-size:48px;margin-bottom:16px;display:block;"></i>
                 Stream de vídeo indisponível.<br>
                 <small>Verifique se a câmera está conectada e o backend em execução.</small>
@@ -310,14 +288,18 @@ let currentCameraZonas = [];
 // ─────────────────────────────────────────────
 
 async function fetchZonas(cameraId) {
+    const overlay = document.getElementById("zonasOverlay");
     try {
         const result = await apiGet(`/zonas/camera/${cameraId}`);
+        // Descarta respostas de streams substituídos, inclusive na troca A → B → A.
+        if (overlay !== document.getElementById("zonasOverlay")) return;
         if (result.ok && Array.isArray(result.data)) {
             currentCameraZonas = result.data;
         } else {
             currentCameraZonas = [];
         }
     } catch (e) {
+        if (overlay !== document.getElementById("zonasOverlay")) return;
         console.error("[Monitoramento] Erro ao buscar zonas:", e);
         currentCameraZonas = [];
     }

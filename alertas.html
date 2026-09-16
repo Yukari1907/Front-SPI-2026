@@ -67,7 +67,7 @@
 
 <article class="card">
     <div class="grid filters">
-        <div class="form-group"><label for="alertSearch">Pesquisar</label><input id="alertSearch" type="search" placeholder="Tipo, setor, câmera ou trabalhador"></div>
+        <div class="form-group"><label for="alertSearch">Pesquisar</label><input id="alertSearch" type="search" placeholder="Tipo, setor, zona, câmera ou trabalhador"></div>
         <div class="form-group"><label for="alertSeverity">Severidade</label><select id="alertSeverity"><option value="">Todas</option><option value="Crítico">Crítico</option><option value="Médio">Médio</option><option value="Baixo">Baixo</option></select></div>
         <div class="form-group"><label for="alertStatus">Status</label><select id="alertStatus"><option value="">Todos</option><option value="Pendente">Pendente</option><option value="Em análise">Em análise</option><option value="Resolvido">Resolvido</option></select></div>
     </div>
@@ -79,7 +79,7 @@
     <div class="table-wrap">
         <table>
             <thead>
-                <tr><th>Data/Hora</th><th>Setor</th><th>Evento</th><th>Severidade</th><th>Status</th><th>Ação</th></tr>
+                <tr><th>Data/Hora</th><th>Setor</th><th>Zona</th><th>Evento</th><th>Severidade</th><th>Status</th><th>Ação</th></tr>
             </thead>
             <tbody id="alertsTable"></tbody>
         </table>
@@ -137,6 +137,11 @@
                 >
                     —
                 </strong>
+            </div>
+
+            <div class="card" style="box-shadow:none">
+                <small class="text-muted">Zona</small>
+                <strong id="alertDetailZone" style="display:block;margin-top:5px">—</strong>
             </div>
 
             <div class="card" style="box-shadow:none">
