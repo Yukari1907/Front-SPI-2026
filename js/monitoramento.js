@@ -9,6 +9,8 @@
  *   GET /setores            → listar setores (idem)
  *   GET /video/<id>         → stream MJPEG da câmera selecionada
  *   GET /detections/<id>    → últimas detecções da câmera selecionada (polling)
+ *   PUT /cameras/<id>       → editar nome, IP, setor, rotação e espelhamento
+ *                             (admin/supervisor, conforme perfil_required)
  *
  * Seletor de câmera: a tela mostra uma câmera por vez (não múltiplas
  * simultâneas), escolhida pelo <select> ou clicando na lista de câmeras.
@@ -23,7 +25,13 @@
 const CAMERAS_SETORES_CACHE_TTL_MS = 45000;
 
 let monitoramentoCameras = [];
+let monitoramentoSetores = [];
 let currentCameraId = null;
+
+// GET /cameras e GET /cameras/status não devolvem rotacao/espelhar_*; somente a
+// resposta do PUT devolve. Guardamos o que o backend confirmou nesta página
+// para reapresentar no formulário, sem persistir nem inventar valor.
+const camerasTransformacoesAplicadas = new Map();
 
 // ─────────────────────────────────────────────
 // Carregar câmeras e setores
@@ -44,11 +52,10 @@ async function loadMonitoramento() {
 
         // Monta dicionário de setores: id → nome
         const setoresMap = {};
-        if (setoresResult.ok && Array.isArray(setoresResult.data)) {
-            setoresResult.data.forEach(setor => {
-                setoresMap[setor.id] = setor.nome;
-            });
-        }
+        monitoramentoSetores = setoresResult.ok && Array.isArray(setoresResult.data) ? setoresResult.data : [];
+        monitoramentoSetores.forEach(setor => {
+            setoresMap[setor.id] = setor.nome;
+        });
 
         if (camerasResult.status === 0) {
             cameraList.innerHTML = `
@@ -75,8 +82,13 @@ async function loadMonitoramento() {
         renderCameraList(setoresMap);
         renderCameraSelect(setoresMap);
 
-        // Seleciona a primeira câmera por padrão
-        selectCamera(monitoramentoCameras[0].id);
+        const editButton = document.getElementById("openCameraModal");
+        if (editButton) editButton.disabled = false;
+
+        // Mantém a câmera selecionada ao recarregar (ex.: após editar a câmera);
+        // na primeira carga, seleciona a primeira.
+        const preserved = monitoramentoCameras.some(camera => camera.id === currentCameraId);
+        selectCamera(preserved ? currentCameraId : monitoramentoCameras[0].id);
 
     } catch (e) {
         console.error("[Monitoramento] Erro ao carregar câmeras:", e);
@@ -129,9 +141,12 @@ function renderCameraSelect(setoresMap) {
         return `<option value="${camera.id}">Câmera ${camera.id}${setorNome ? ` — ${escapeHtml(setorNome)}` : ""}</option>`;
     }).join("");
 
-    select.addEventListener("change", () => {
+    if (currentCameraId !== null) select.value = String(currentCameraId);
+
+    // onchange (e não addEventListener) para não acumular handlers ao recarregar.
+    select.onchange = () => {
         selectCamera(Number(select.value));
-    });
+    };
 }
 
 function selectCamera(cameraId) {
@@ -381,6 +396,171 @@ function renderZonasOverlay() {
 }
 
 // ─────────────────────────────────────────────
+// Edição da câmera (admin/supervisor no backend)
+// ─────────────────────────────────────────────
+
+// Valores aceitos por CameraDTO.rotacao; nenhum outro é oferecido.
+const CAMERA_ROTATIONS = [0, 90, 180, 270];
+
+function renderCameraSectorOptions(camera) {
+    const select = document.getElementById("cameraSector");
+    const options = monitoramentoSetores.map(setor =>
+        `<option value="${escapeHtml(setor.id)}">${escapeHtml(setor.nome)}</option>`);
+
+    // O setor atual da câmera precisa existir como opção para o PUT não movê-la
+    // de setor quando a listagem estiver indisponível ou incompleta.
+    const current = Number(camera.id_setor);
+    if (Number.isInteger(current) && !monitoramentoSetores.some(setor => Number(setor.id) === current)) {
+        options.unshift(`<option value="${current}">Setor ${current}</option>`);
+    }
+
+    select.innerHTML = options.join("");
+    if (Number.isInteger(current)) select.value = String(current);
+    return select.options.length > 0;
+}
+
+function configureCameraEditing() {
+    const modal = document.getElementById("cameraModal");
+    const form = document.getElementById("cameraForm");
+    const openButton = document.getElementById("openCameraModal");
+    const saveButton = document.getElementById("saveCameraButton");
+    if (!modal || !form || !openButton || !saveButton) return;
+
+    const error = document.getElementById("cameraFormError");
+    const showError = message => {
+        error.textContent = message;
+        error.hidden = !message;
+    };
+
+    const close = () => {
+        if (saveButton.disabled) return;
+        modal.classList.remove("active");
+        showError("");
+        openButton.focus();
+    };
+
+    openButton.addEventListener("click", () => {
+        const camera = monitoramentoCameras.find(item => item.id === currentCameraId);
+        if (!camera) {
+            showToast("Selecione uma câmera cadastrada para editar.", "warning");
+            return;
+        }
+
+        showError("");
+        document.getElementById("cameraModalHint").textContent =
+            `Configuração da câmera ${camera.id}${camera.nome ? ` — ${camera.nome}` : ""}.`;
+        document.getElementById("cameraName").value = camera.nome || "";
+        document.getElementById("cameraIp").value = camera.ip || "";
+
+        if (!renderCameraSectorOptions(camera)) {
+            showError("Nenhum setor disponível: o backend exige um setor válido para salvar a câmera.");
+        }
+
+        // GET não devolve rotação/espelhamento: só reapresentamos o que o
+        // próprio backend confirmou em um PUT desta sessão.
+        const applied = camerasTransformacoesAplicadas.get(camera.id);
+        document.getElementById("cameraRotation").value = String(applied?.rotacao ?? 0);
+        document.getElementById("cameraMirrorH").checked = applied?.espelhar_horizontal === true;
+        document.getElementById("cameraMirrorV").checked = applied?.espelhar_vertical === true;
+        document.getElementById("cameraTransformNote").textContent = applied
+            ? "Rotação e espelhamento confirmados pelo backend ao salvar nesta sessão."
+            : "O backend não informa a rotação e o espelhamento atuais: o valor enviado aqui substitui o que estiver gravado.";
+
+        modal.classList.add("active");
+        document.getElementById("cameraName").focus();
+    });
+
+    document.getElementById("closeCameraModal").addEventListener("click", close);
+    document.getElementById("cancelCameraModal").addEventListener("click", close);
+    modal.addEventListener("click", event => {
+        if (event.target === modal) close();
+    });
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape" && modal.classList.contains("active")) close();
+        if (event.key === "Tab" && modal.classList.contains("active")) {
+            const controls = [...modal.querySelectorAll("button, input, select")]
+                .filter(element => !element.disabled && element.getClientRects().length);
+            const first = controls[0], last = controls.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
+    });
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+        if (saveButton.disabled || !form.reportValidity()) return;
+
+        const cameraId = currentCameraId;
+        const fields = new FormData(form);
+        const nome = String(fields.get("nome") || "").trim();
+        const ip = String(fields.get("ip") || "").trim();
+        const idSetor = Number(fields.get("id_setor"));
+        const rotacao = Number(fields.get("rotacao"));
+
+        if (!ip) {
+            showError("Informe o endereço/IP da câmera.");
+            return;
+        }
+        if (!Number.isInteger(idSetor)) {
+            showError("Selecione um setor cadastrado.");
+            return;
+        }
+        if (!CAMERA_ROTATIONS.includes(rotacao)) {
+            showError("Selecione uma rotação suportada pelo backend.");
+            return;
+        }
+
+        // Tipos exatos do CameraDTO: strings, inteiro e booleanos reais.
+        const payload = {
+            nome: nome || null,
+            ip,
+            id_setor: idSetor,
+            rotacao,
+            espelhar_horizontal: document.getElementById("cameraMirrorH").checked,
+            espelhar_vertical: document.getElementById("cameraMirrorV").checked
+        };
+
+        saveButton.disabled = true;
+        showError("");
+        try {
+            const result = await apiPut(`/cameras/${cameraId}`, payload);
+            if (!result.ok) {
+                showError(result.data?.message || result.data?.error
+                    || (result.status === 403
+                        ? "Seu perfil não tem permissão para editar câmeras."
+                        : "Não foi possível salvar a câmera."));
+                return;
+            }
+
+            // Guarda o que o backend devolveu, não o que foi enviado.
+            const data = result.data || {};
+            if (CAMERA_ROTATIONS.includes(Number(data.rotacao))) {
+                camerasTransformacoesAplicadas.set(cameraId, {
+                    rotacao: Number(data.rotacao),
+                    espelhar_horizontal: data.espelhar_horizontal === true,
+                    espelhar_vertical: data.espelhar_vertical === true
+                });
+            }
+
+            apiClearCached("/cameras");
+            saveButton.disabled = false;
+            close();
+            showToast("Câmera atualizada com sucesso.");
+            await loadMonitoramento();
+        } catch {
+            showError("Não foi possível salvar a câmera. Tente novamente.");
+        } finally {
+            saveButton.disabled = false;
+        }
+    });
+}
+
+// ─────────────────────────────────────────────
 // Inicialização
 // ─────────────────────────────────────────────
 
@@ -400,6 +580,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
     }
     
+    configureCameraEditing();
     loadMonitoramento();
 });
 

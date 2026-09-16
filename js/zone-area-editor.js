@@ -14,7 +14,7 @@ class ZoneAreaEditor {
         this.busy = false;
         this.clear();
         this.resetButton.addEventListener("click", () => this.resetSelection());
-        this.retryButton.addEventListener("click", () => this.load(this.cameraId));
+        this.retryButton.addEventListener("click", () => this.load(this.cameraId, this.initialSelection));
         this.overlay.addEventListener("pointerdown", event => {
             if (!this.ready || this.busy || !event.isPrimary || event.button !== 0) return;
             event.preventDefault();
@@ -79,6 +79,7 @@ class ZoneAreaEditor {
     clear() {
         this.stopMedia();
         this.cameraId = null;
+        this.initialSelection = null;
         this.retryButton.hidden = true;
         this.status.textContent = "Selecione uma câmera para carregar a imagem.";
     }
@@ -89,10 +90,12 @@ class ZoneAreaEditor {
         this.status.textContent = "Imagem indisponível. Verifique a conexão da câmera, tente novamente ou escolha outra câmera.";
     }
 
-    load(cameraId) {
+    load(cameraId, initialSelection = null) {
         this.clear();
         if (!Number.isInteger(cameraId)) return;
         this.cameraId = cameraId;
+        // Área já persistida (edição). Normalizada 0–1, independe da resolução.
+        this.initialSelection = initialSelection;
         const version = this.version;
         const image = new Image();
         this.image = image;
@@ -106,13 +109,13 @@ class ZoneAreaEditor {
         const checkImage = () => {
             if (!current() || !image.naturalWidth || !image.naturalHeight) return;
             const nextDimensions = `${image.naturalWidth}x${image.naturalHeight}`;
-            if (dimensions && dimensions !== nextDimensions) this.resetSelection();
+            if (dimensions && dimensions !== nextDimensions) this.applyInitialSelection();
             dimensions = nextDimensions;
             if (!connected || this.ready) return;
             this.ready = true;
             this.stage.hidden = false;
             clearTimeout(this.loadTimer);
-            this.status.textContent = "Nenhuma área selecionada. Arraste sobre a imagem.";
+            this.applyInitialSelection();
         };
         // MJPEG pode expor dimensões antes de emitir load (a resposta é contínua).
         image.onload = checkImage;
@@ -157,13 +160,26 @@ class ZoneAreaEditor {
         this.selection = { x, y,
             largura: Math.min(Math.abs(end.x - start.x), 1 - x),
             altura: Math.min(Math.abs(end.y - start.y), 1 - y) };
-        const { largura, altura } = this.selection;
+        this.drawSelection(this.selection);
+        this.status.textContent = "Solte para confirmar a área.";
+    }
+
+    drawSelection(selection) {
+        this.selection = { ...selection };
+        const { x, y, largura, altura } = this.selection;
         Object.entries({ x, y, width: largura, height: altura }).forEach(([key, value]) => {
             this.rectangle.setAttribute(key, value);
         });
         this.rectangle.style.display = "";
-        this.resetButton.disabled = false;
-        this.status.textContent = "Solte para confirmar a área.";
+        this.resetButton.disabled = this.busy;
+    }
+
+    // Sem área inicial (criação) o comportamento é o mesmo de resetSelection.
+    applyInitialSelection() {
+        this.resetSelection();
+        if (!this.initialSelection) return;
+        this.drawSelection(this.initialSelection);
+        if (this.ready) this.status.textContent = "Área atual da zona. Arraste sobre a imagem para redesenhar.";
     }
 
     validSelection() {

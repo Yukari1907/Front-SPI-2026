@@ -21,7 +21,7 @@ function getRolePermissions(role = getCurrentRole()) {
     return {
         pages: admin ? [...READ_PAGES, "admin"] : READ_PAGES,
         actions: ["alerts:view", "alerts:manage", "inventory:export",
-            ...(manager ? ["inventory:create", "inventory:edit", "inventory:delete"] : []),
+            ...(manager ? ["inventory:create", "inventory:edit", "inventory:delete", "cameras:edit"] : []),
             ...(admin ? ["users:create"] : [])]
     };
 }

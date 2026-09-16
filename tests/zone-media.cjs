@@ -8,7 +8,8 @@ const root = path.resolve(__dirname, '..');
 
 (async () => {
     const browser = await chromium.launch({ headless: true, executablePath: process.env.SPI_CHROMIUM_EXECUTABLE || undefined });
-    const errors = [], posts = [], streams = new Set(), passed = [];
+    const errors = [], posts = [], puts = [], streams = new Set(), passed = [];
+    let zones = [];
     let frame, holdFrames = false, healthGate = null, connected = true;
     const check = name => { passed.push(name); console.log('PASS', name); };
     const server = http.createServer((req, res) => {
@@ -49,6 +50,11 @@ const root = path.resolve(__dirname, '..');
                     const gate = healthGate;
                     if (gate) await gate;
                 } else if (url.pathname === '/zonas/registrar') posts.push(route.request().postDataJSON());
+                else if (/^\/zonas\/\d+$/.test(url.pathname)) {
+                    puts.push({ method: route.request().method(), path: url.pathname, body: route.request().postDataJSON() });
+                    data = { id: Number(url.pathname.split('/').pop()) };
+                }
+                else if (url.pathname === '/zonas') data = zones;
                 return route.fulfill({ contentType: 'application/json', body: JSON.stringify(data) });
             }
             if (url.hostname === 'cdn.socket.io') return route.fulfill({ contentType: 'application/javascript', body: 'window.io=()=>({on:()=>{}});' });
@@ -144,6 +150,42 @@ const root = path.resolve(__dirname, '..');
         assert.deepEqual(errors, []);
         assert.equal(posts.length, 0);
         check('Consulta de conexão sem resposta expira, descarta seleção e não produz exceções JS');
+
+        // Edição de zona sobre o mesmo transporte MJPEG real.
+        await page.locator('#cancelZoneModal').click();
+        zones = [{ id: 9, nome: 'Área persistida', id_camera: 1, x: 0.2, y: 0.15, largura: 0.4, altura: 0.3, permitido: false }];
+        await page.evaluate(() => loadRiskZones());
+        frame = await jpeg(1280, 720);
+        const readRect = () => page.locator('#zoneAreaRect').evaluate(rect =>
+            ['x', 'y', 'width', 'height'].map(key => Number(rect.getAttribute(key))));
+        await page.locator('[data-edit-zone="9"]').click();
+        await page.locator('#zoneAreaOverlay').waitFor({ state: 'visible' });
+        assert.deepEqual(await page.locator('#zoneFrame').evaluate(el => [el.naturalWidth, el.naturalHeight]), [1280, 720]);
+        assert.deepEqual(await readRect(), [0.2, 0.15, 0.4, 0.3]);
+        assert.equal(await page.locator('#zoneName').inputValue(), 'Área persistida');
+        check('Edição sobre MJPEG real desenha a área persistida da zona sobre o frame da câmera');
+
+        frame = await jpeg(720, 1280);
+        await page.waitForFunction(() => document.getElementById('zoneFrame').naturalWidth === 720);
+        await page.waitForFunction(() => document.getElementById('zoneAreaStatus').textContent.includes('Área atual da zona'));
+        assert.deepEqual(await readRect(), [0.2, 0.15, 0.4, 0.3]);
+        // Descarta frames ainda em decodificação na resolução anterior antes de redesenhar.
+        await page.waitForTimeout(600);
+        assert.deepEqual(await page.locator('#zoneFrame').evaluate(el => [el.naturalWidth, el.naturalHeight]), [720, 1280]);
+        await draw();
+        const redrawn = await readRect();
+        assert.notDeepEqual(redrawn, [0.2, 0.15, 0.4, 0.3]);
+        await page.locator('#saveZoneButton').click();
+        await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active'));
+        assert.equal(posts.length, 0);
+        assert.equal(puts.length, 1);
+        assert.equal(puts[0].method, 'PUT');
+        assert.equal(puts[0].path, '/zonas/9');
+        assert.deepEqual([puts[0].body.x, puts[0].body.y, puts[0].body.largura, puts[0].body.altura], redrawn);
+        assert.equal(puts[0].body.id_camera, 1);
+        assert.equal('id_epi' in puts[0].body, false);
+        assert.deepEqual(errors, []);
+        check('Troca de resolução preserva a área persistida e o redesenho envia PUT /zonas/{id} com a nova área normalizada');
         console.log(JSON.stringify({ passed: passed.length, pageErrors: errors, backend: 'simulado', transport: 'MJPEG multipart HTTP' }));
     } finally {
         await browser.close();

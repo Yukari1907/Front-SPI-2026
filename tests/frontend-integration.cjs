@@ -13,7 +13,11 @@ let alertsStatus = 200;
 let resolveStatus = 200;
 const resolveRequests = [];
 const mutations = [], zoneRequests = [];
-let zonesStatus = 200, createZoneStatus = 201;
+let zonesStatus = 200, createZoneStatus = 201, updateZoneStatus = 200;
+let epiStatus = 200, epiData = [{ id: 5, nome: 'Capacete real', categoria: 'Cabeça' }, { id: 6, nome: 'Luva <b>', categoria: '' }];
+let updateCameraStatus = 200;
+const cameraRequests = [];
+let sessionUser = { id: 1, nome: 'Teste', perfil: 'admin', admin: true, ativo: true };
 let zoneData = [
     { id: 1, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.1, largura: 0.3, altura: 0.3, permitido: false },
     { id: 2, nome: 'Área de carga', id_camera: 1, x: 0.5, y: 0.5, largura: 0.2, altura: 0.2, permitido: true }
@@ -50,7 +54,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                 calls.push(url.pathname + url.search);
                 if (!['GET', 'OPTIONS'].includes(route.request().method())) mutations.push(url.pathname);
                 let status = 200, data;
-                if (url.pathname === '/session') data = { authenticated: true, user: { id: 1, nome: 'Teste', perfil: 'admin', admin: true, ativo: true } };
+                if (url.pathname === '/session') data = { authenticated: true, user: sessionUser };
                 else if (url.pathname === '/cameras/status') {
                     if (cameraStatus === 0) return route.abort('failed');
                     data = cameras; status = cameraStatus;
@@ -75,7 +79,31 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                     data = status === 201 ? { id: zoneData.length + 1, ...body } : { error: 'Falha ao registrar a zona' };
                     if (status === 201) zoneData.push(data);
                 }
+                else if (/^\/zonas\/\d+$/.test(url.pathname)) {
+                    const body = route.request().postDataJSON();
+                    zoneRequests.push({ method: route.request().method(), path: url.pathname, body });
+                    if (updateZoneStatus === 0) return route.abort('failed');
+                    status = updateZoneStatus;
+                    if (status === 200) {
+                        const id = Number(url.pathname.split('/').pop());
+                        data = { id, ...body };
+                        zoneData = zoneData.map(zone => (zone.id === id ? data : zone));
+                    } else data = { error: 'Falha ao atualizar a zona' };
+                }
                 else if (url.pathname.startsWith('/zonas/')) data = monitoringZones;
+                else if (url.pathname === '/epis') {
+                    if (epiStatus === 0) return route.abort('failed');
+                    data = epiData; status = epiStatus;
+                }
+                else if (/^\/cameras\/\d+$/.test(url.pathname)) {
+                    const body = route.request().postDataJSON();
+                    cameraRequests.push({ method: route.request().method(), path: url.pathname, body });
+                    if (updateCameraStatus === 0) return route.abort('failed');
+                    status = updateCameraStatus;
+                    data = status === 200
+                        ? { id: Number(url.pathname.split('/').pop()), ...body }
+                        : { message: 'Acesso negado: você não tem permissão para acessar este recurso.' };
+                }
                 else if (url.pathname.startsWith('/detections/')) { data = detections; status = detectionStatus; }
                 else if (url.pathname.startsWith('/video/')) {
                     const [width, height] = streamDimensions;
@@ -1083,6 +1111,232 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.evaluate(() => renderSectorList({ ok: true, status: 200, data: [] }, { data: [] }));
         assert.match(await page.locator('#sectorList').innerText(), /Nenhum setor cadastrado/);
         check('Fallback e lista vazia de setores preservados; planta permanece sem câmeras');
+        // --- EPI obrigatorio na zona, edicao de zona e edicao de camera ---
+        cameraListData = [
+            { id: 1, nome: 'Entrada', id_setor: 1, ip: 'rtsp://camera_user:camera_password@10.20.30.41:554/stream' },
+            { id: 2, nome: 'Saída', id_setor: 1, ip: '10.20.30.42' }
+        ];
+        cameras = cameraListData;
+        cameraStatus = 200; cameraListStatus = 200; sectorsStatus = 200; zonesStatus = 200;
+        detections = { connected: true, fps: 15, latencia_ms: 46, class_count: {}, detections: [] };
+        detectionStatus = 200; streamStatus = 200; streamDimensions = [640, 360];
+        sectorData = [{ id: 1, nome: 'Produção' }, { id: 2, nome: 'Expedição' }];
+        zoneData = [{ id: 7, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, permitido: false }];
+        await page.evaluate(() => sessionStorage.clear());
+        await page.goto('http://localhost:8765/mapeamento.html');
+        await page.waitForFunction(() => document.querySelectorAll('#zoneCamera option').length === 3);
+
+        await page.locator('#openZoneModal').click();
+        await page.waitForFunction(() => !document.getElementById('zoneEpi').disabled);
+        assert.deepEqual(await page.locator('#zoneEpi option').evaluateAll(options => options.map(option => option.textContent.trim())),
+            ['Sem EPI obrigatório', 'Capacete real — Cabeça', 'Luva <b>']);
+        assert.equal(await page.locator('#zoneEpi b').count(), 0);
+        assert.equal(await page.locator('#zoneEpi').inputValue(), '');
+        assert(await page.locator('#zoneEpiGroup').isVisible());
+        assert.equal(await page.locator('#zoneEpiUnavailable').isVisible(), false);
+        for (const [status, data, expectedOption, expectedHint] of [
+            [200, [], /Nenhum EPI cadastrado/, /Nenhum EPI cadastrado/],
+            [500, epiData, /EPIs indisponíveis/, /Não foi possível carregar/],
+            [0, epiData, /EPIs indisponíveis/, /Não foi possível carregar/]
+        ]) {
+            await page.locator('#cancelZoneModal').click();
+            const previous = epiData;
+            epiStatus = status; epiData = data;
+            await page.locator('#openZoneModal').click();
+            await page.waitForFunction(() => document.getElementById('zoneEpi').disabled === true
+                && !document.getElementById('zoneEpi').textContent.includes('Carregando'));
+            assert.match(await page.locator('#zoneEpi').innerText(), expectedOption);
+            assert.match(await page.locator('#zoneEpiHint').innerText(), expectedHint);
+            assert.equal(await page.locator('#zoneEpi option').count(), 1);
+            epiData = previous;
+        }
+        epiStatus = 200;
+        await page.locator('#cancelZoneModal').click();
+        check('EPI obrigatório vem do cadastro real e distingue lista vazia, HTTP 500 e falha de rede, sem opções fixas');
+
+        await page.locator('#openZoneModal').click();
+        await page.waitForFunction(() => !document.getElementById('zoneEpi').disabled);
+        await page.locator('#zoneCamera').selectOption('1');
+        await page.locator('#zoneName').fill('Zona com EPI');
+        await page.locator('#zoneEpi').selectOption('5');
+        await drawArea();
+        const createdArea = await readArea();
+        await page.locator('#saveZoneButton').click();
+        await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active'));
+        assert.deepEqual(zoneRequests.at(-1), { method: 'POST', body: {
+            id_camera: 1, nome: 'Zona com EPI', permitido: false,
+            x: createdArea.x, y: createdArea.y, largura: createdArea.width, altura: createdArea.height, id_epi: 5
+        } });
+        await page.locator('#openZoneModal').click();
+        await page.waitForFunction(() => !document.getElementById('zoneEpi').disabled);
+        await page.locator('#zoneCamera').selectOption('1');
+        await page.locator('#zoneName').fill('Zona sem EPI');
+        await drawArea();
+        await page.locator('#saveZoneButton').click();
+        await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active'));
+        assert.equal('id_epi' in zoneRequests.at(-1).body, false);
+        check('Criação envia um único id_epi numérico quando escolhido e omite o campo quando não há EPI');
+
+        zoneData = [{ id: 7, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, permitido: false }];
+        await page.evaluate(() => loadRiskZones());
+        await page.locator('[data-edit-zone="7"]').click();
+        assert.equal(await page.locator('#zoneModalTitle').innerText(), 'Editar zona');
+        assert.equal(await page.locator('#saveZoneLabel').innerText(), 'Salvar zona');
+        assert.equal(await page.locator('#zoneName').inputValue(), 'Prensa hidráulica');
+        assert.equal(await page.locator('#zoneCamera').inputValue(), '1');
+        assert.equal(await page.locator('#zoneAllowed').isChecked(), false);
+        assert.equal(await page.locator('#zoneEpiGroup').isVisible(), false);
+        assert(await page.locator('#zoneEpiUnavailable').isVisible());
+        assert.match(await page.locator('#zoneEpiUnavailable').innerText(), /não altera essa associação/);
+        await area.waitFor({ state: 'visible' });
+        await assertArea({ x: 0.1, y: 0.2, width: 0.3, height: 0.25 });
+        assert.match(await page.locator('#zoneAreaStatus').innerText(), /Área atual da zona/);
+        check('Edição carrega os dados reais da zona, mostra a área persistida sobre o frame e declara o EPI indisponível');
+
+        for (const status of [400, 0]) {
+            updateZoneStatus = status;
+            const before = zoneRequests.length;
+            await page.locator('#saveZoneButton').click();
+            await page.waitForFunction(() => !document.getElementById('saveZoneButton').disabled);
+            assert.equal(zoneRequests.length, before + 1);
+            assert.equal(zoneRequests.at(-1).method, 'PUT');
+            assert.equal(zoneRequests.at(-1).path, '/zonas/7');
+            assert.deepEqual(zoneRequests.at(-1).body, { id_camera: 1, nome: 'Prensa hidráulica', permitido: false, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25 });
+            assert(await page.locator('#zoneModal').isVisible());
+            assert.equal(await page.locator('#zoneName').inputValue(), 'Prensa hidráulica');
+            assert.match(await page.locator('#riskZonesList').innerText(), /Prensa hidráulica/);
+        }
+        check('Área persistida é reenviada sem redesenho; PUT com HTTP 400 e falha de rede preserva o formulário e a lista');
+
+        updateZoneStatus = 200;
+        await drawArea([0.5, 0.45], [0.85, 0.8]);
+        const editedArea = await readArea();
+        await page.locator('#zoneName').fill('Prensa revisada');
+        await page.locator('#zoneAllowed').check();
+        await page.locator('#saveZoneButton').click();
+        await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active')
+            && document.getElementById('riskZonesList').textContent.includes('Prensa revisada'));
+        assert.deepEqual(zoneRequests.at(-1), { method: 'PUT', path: '/zonas/7', body: {
+            id_camera: 1, nome: 'Prensa revisada', permitido: true,
+            x: editedArea.x, y: editedArea.y, largura: editedArea.width, altura: editedArea.height
+        } });
+        assert.equal('id_epi' in zoneRequests.at(-1).body, false);
+        assert.match(await page.locator('#riskZonesList .badge').first().innerText(), /Permitida/);
+        await page.locator('#openZoneModal').click();
+        assert.equal(await page.locator('#zoneModalTitle').innerText(), 'Criar nova zona');
+        assert.equal(await page.locator('#zoneName').inputValue(), '');
+        assert(await page.locator('#zoneEpiGroup').isVisible());
+        await page.locator('#cancelZoneModal').click();
+        check('Redesenho envia a nova área normalizada, nunca id_epi no PUT, atualiza a lista e volta ao modo de criação');
+
+        for (const width of [1440, 768, 390]) {
+            await page.setViewportSize({ width, height: 1000 });
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+                await page.locator('[data-edit-zone="7"]').click();
+                assert(await page.locator('#zoneModal').isVisible());
+                await assertContrast(page.locator('#zoneName'));
+                const box = await page.locator('#zoneModal .modal-box').boundingBox();
+                assert(box.x >= 0 && box.x + box.width <= width);
+                await page.locator('#cancelZoneModal').click();
+            }
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+        check('Modal de edição de zona cabe e permanece legível em 1440/768/390 nos dois temas');
+
+        await page.evaluate(() => sessionStorage.clear());
+        await page.goto('http://localhost:8765/monitoramento.html');
+        await page.waitForFunction(() => document.querySelectorAll('#cameraSelect option').length === 2);
+        await page.locator('#cameraSelect').selectOption('2');
+        await page.waitForFunction(() => currentCameraId === 2);
+        await page.locator('#openCameraModal').click();
+        assert.equal(await page.locator('#cameraName').inputValue(), 'Saída');
+        assert.equal(await page.locator('#cameraIp').inputValue(), '10.20.30.42');
+        assert.equal(await page.locator('#cameraSector').inputValue(), '1');
+        assert.deepEqual(await page.locator('#cameraSector option').evaluateAll(options => options.map(option => option.value)), ['1', '2']);
+        assert.deepEqual(await page.locator('#cameraRotation option').evaluateAll(options => options.map(option => option.value)), ['0', '90', '180', '270']);
+        assert.equal(await page.locator('#cameraRotation').inputValue(), '0');
+        assert.equal(await page.locator('#cameraMirrorH').isChecked(), false);
+        assert.equal(await page.locator('#cameraMirrorV').isChecked(), false);
+        assert.match(await page.locator('#cameraTransformNote').innerText(), /não informa a rotação e o espelhamento atuais/);
+        assert.doesNotMatch(await page.locator('#cameraList').innerHTML(), /10\.20\.30\.42/);
+        assert.doesNotMatch(await page.locator('#cameraSelect').innerHTML(), /10\.20\.30\.42/);
+        check('Editor de câmera carrega nome/IP/setor reais, oferece só as rotações do DTO e não fabrica rotação/espelhamento');
+
+        await page.locator('#cameraName').fill('Saída revisada');
+        await page.locator('#cameraIp').fill('rtsp://10.20.30.99:554/stream');
+        await page.locator('#cameraSector').selectOption('2');
+        await page.locator('#cameraRotation').selectOption('270');
+        await page.locator('#cameraMirrorH').check();
+        for (const [status, expected] of [[403, /Acesso negado/], [0, /conectar ao servidor/]]) {
+            updateCameraStatus = status;
+            const before = cameraRequests.length;
+            await page.locator('#saveCameraButton').click();
+            await page.waitForFunction(() => !document.getElementById('cameraFormError').hidden);
+            assert.equal(cameraRequests.length, before + 1);
+            assert.match(await page.locator('#cameraFormError').innerText(), expected);
+            assert(await page.locator('#cameraModal').isVisible());
+            assert.equal(await page.locator('#cameraName').inputValue(), 'Saída revisada');
+            assert.equal(await page.locator('#cameraIp').inputValue(), 'rtsp://10.20.30.99:554/stream');
+            assert.equal(await page.locator('#cameraSector').inputValue(), '2');
+            assert.equal(await page.locator('[data-camera-id="2"] small').innerText(), 'Produção');
+        }
+        check('PUT recusado por perfil (403) ou por rede preserva o formulário, informa o erro e não atualiza a interface');
+
+        updateCameraStatus = 200;
+        cameraListData = [cameraListData[0], { id: 2, nome: 'Saída revisada', id_setor: 2, ip: 'rtsp://10.20.30.99:554/stream' }];
+        const camerasCallsBefore = calls.filter(url => url === '/cameras').length;
+        const streamBefore = await page.locator('#videoStream').getAttribute('src');
+        await page.locator('#saveCameraButton').click();
+        await page.waitForFunction(() => !document.getElementById('cameraModal').classList.contains('active'));
+        assert.deepEqual(cameraRequests.at(-1), { method: 'PUT', path: '/cameras/2', body: {
+            nome: 'Saída revisada', ip: 'rtsp://10.20.30.99:554/stream', id_setor: 2,
+            rotacao: 270, espelhar_horizontal: true, espelhar_vertical: false
+        } });
+        assert.equal(typeof cameraRequests.at(-1).body.espelhar_horizontal, 'boolean');
+        assert.equal(typeof cameraRequests.at(-1).body.id_setor, 'number');
+        await page.waitForFunction(() => document.querySelector('#cameraSelect option[value="2"]').textContent.includes('Expedição'));
+        assert(calls.filter(url => url === '/cameras').length > camerasCallsBefore);
+        assert.equal(await page.evaluate(() => currentCameraId), 2);
+        assert.equal(await page.locator('#cameraSelect').inputValue(), '2');
+        assert.equal(await page.locator('#videoStream').getAttribute('src'), streamBefore);
+        assert.equal(await page.locator('[data-camera-id="2"] small').innerText(), 'Expedição');
+        assert.doesNotMatch(await page.locator('#cameraList').innerHTML(), /10\.20\.30\.99/);
+        await page.locator('#openCameraModal').click();
+        assert.equal(await page.locator('#cameraRotation').inputValue(), '270');
+        assert(await page.locator('#cameraMirrorH').isChecked());
+        assert.equal(await page.locator('#cameraMirrorV').isChecked(), false);
+        assert.match(await page.locator('#cameraTransformNote').innerText(), /confirmados pelo backend/);
+        assert.equal(await page.locator('#cameraName').inputValue(), 'Saída revisada');
+        check('PUT aceito envia tipos exatos, invalida o cache, atualiza nome/setor, preserva a câmera e o stream e reapresenta a transformação confirmada');
+
+        for (const width of [1440, 768, 390]) {
+            await page.setViewportSize({ width, height: 1000 });
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+                assert(await page.locator('#cameraModal').isVisible());
+                await assertContrast(page.locator('#cameraIp'));
+                const box = await page.locator('#cameraModal .modal-box').boundingBox();
+                assert(box.x >= 0 && box.x + box.width <= width);
+            }
+        }
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        await page.evaluate(() => document.documentElement.dataset.theme = 'light');
+        await page.locator('#cancelCameraModal').click();
+        assert.equal(await page.locator('#cameraModal').isVisible(), false);
+        check('Modal de edição de câmera cabe e permanece legível em 1440/768/390 nos dois temas');
+
+        for (const [perfil, admin, allowed] of [['operador', false, false], ['supervisor', false, true], ['admin', true, true]]) {
+            sessionUser = { id: 1, nome: 'Teste', perfil, admin, ativo: true };
+            await page.evaluate(() => sessionStorage.clear());
+            await page.goto('http://localhost:8765/monitoramento.html');
+            await page.waitForFunction(() => document.querySelectorAll('#cameraSelect option').length === 2);
+            assert.equal(await page.evaluate(() => canPerform('cameras:edit')), allowed);
+            assert.equal(await page.locator('#openCameraModal').isVisible(), allowed);
+        }
+        check('Ação de editar câmera segue os perfis reais do backend: admin e supervisor sim, operador não');
+
         assert.equal(calls.some(url => /limit|offset|page|periodo=1/.test(url)), false);
         assert.deepEqual(errors, []);
         check('Sem parâmetros inventados e sem exceções JS');

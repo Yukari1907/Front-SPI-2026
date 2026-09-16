@@ -9,7 +9,15 @@
  *   GET /cameras  → listar câmeras (com id_setor para agrupamento)
  *   GET /cameras/status → contar câmeras com status Ativo
  *   GET /zonas → listar zonas cadastradas
+ *   GET /epis → EPIs reais para o campo "EPI obrigatório" da criação
  *   POST /zonas/registrar → criar zona no quadro de uma câmera
+ *   PUT /zonas/{id} → editar nome, área, permitido e câmera de uma zona
+ *
+ * Cardinalidade do EPI (confirmada em schemas/zona_dto.py e
+ * repository/zonas_repository.py): ZonaDTO.id_epi é um inteiro único e o
+ * registro insere uma linha em "monitorar". Não há lista. O PUT ignora
+ * id_epi, e nenhum GET de zona devolve o EPI associado — por isso o campo
+ * existe apenas na criação.
  *
  * Nota: O backend não retorna coordenadas X/Y para o mapa visual.
  * As câmeras são posicionadas automaticamente de forma distribuída no canvas.
@@ -43,6 +51,8 @@ function generatePositions(count) {
 
 let mappingCameras = [];
 let mappingZones = [];
+// null = criação; id numérico = edição da zona correspondente.
+let editingZoneId = null;
 
 // TTL curto (45s) — sobrevive à navegação entre páginas via sessionStorage,
 // mas não serve dado desatualizado por muito tempo após um cadastro novo.
@@ -117,10 +127,105 @@ async function loadRiskZones(cameras = mappingCameras) {
             <div style="padding:12px 0;border-bottom:1px solid var(--border)">
                 <strong>${escapeHtml(zone.nome || `Zona ${zone.id}`)}</strong>
                 <p class="text-muted">${escapeHtml(camera?.nome || `Câmera ${zone.id_camera}`)}</p>
-                <span class="badge ${zone.permitido ? "success" : "danger"}">${zone.permitido ? "Permitida" : "Restrita / de risco"}</span>
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+                    <span class="badge ${zone.permitido ? "success" : "danger"}">${zone.permitido ? "Permitida" : "Restrita / de risco"}</span>
+                    <button class="btn secondary" type="button" data-edit-zone="${escapeHtml(zone.id)}">
+                        <i class="fa-solid fa-pen"></i>
+                        Editar zona
+                    </button>
+                </div>
             </div>
         `;
     }).join("") : '<p class="text-muted">Nenhuma zona cadastrada.</p>';
+
+    list.querySelectorAll("[data-edit-zone]").forEach(button => {
+        button.addEventListener("click", () => {
+            const zone = mappingZones.find(item => String(item.id) === button.dataset.editZone);
+            if (zone) openZoneModal(zone);
+        });
+    });
+}
+
+/**
+ * Preenche o campo "EPI obrigatório" com o cadastro real.
+ * Erro de API e lista vazia são estados distintos: nenhum deles inventa opções.
+ */
+async function loadZoneEpis() {
+    const select = document.getElementById("zoneEpi");
+    const hint = document.getElementById("zoneEpiHint");
+    if (!select || !hint) return;
+
+    select.disabled = true;
+    select.innerHTML = '<option value="">Carregando EPIs cadastrados…</option>';
+
+    const result = await apiGet("/epis");
+
+    if (!result.ok || !Array.isArray(result.data)) {
+        select.innerHTML = '<option value="">EPIs indisponíveis</option>';
+        hint.textContent = "Não foi possível carregar os EPIs cadastrados. A zona pode ser criada sem EPI obrigatório.";
+        return;
+    }
+
+    if (result.data.length === 0) {
+        select.innerHTML = '<option value="">Nenhum EPI cadastrado</option>';
+        hint.textContent = "Nenhum EPI cadastrado no inventário.";
+        return;
+    }
+
+    select.innerHTML = '<option value="">Sem EPI obrigatório</option>' + result.data.map(epi =>
+        `<option value="${escapeHtml(epi.id)}">${escapeHtml(epi.nome)}${epi.categoria ? ` — ${escapeHtml(epi.categoria)}` : ""}</option>`
+    ).join("");
+    hint.textContent = "Opcional. O backend associa um único EPI por zona, apenas na criação.";
+    select.disabled = false;
+}
+
+let zoneAreaEditor = null;
+
+/**
+ * Abre o modal de zona. Sem argumento cria; com a zona real carrega os dados
+ * atuais dela para edição, incluindo a área persistida sobre o frame da câmera.
+ */
+function openZoneModal(zone = null) {
+    const modal = document.getElementById("zoneModal");
+    const form = document.getElementById("zoneForm");
+    if (!modal || !form || !zoneAreaEditor) return;
+
+    const cameraSelect = document.getElementById("zoneCamera");
+    const editing = zone !== null;
+    editingZoneId = editing ? zone.id : null;
+
+    form.reset();
+    zoneAreaEditor.clear();
+
+    document.getElementById("zoneModalTitle").textContent = editing ? "Editar zona" : "Criar nova zona";
+    document.getElementById("zoneModalHint").textContent = editing
+        ? "Os dados abaixo são os atuais da zona. Redesenhe a área sobre a imagem para alterá-la."
+        : "Escolha uma câmera e desenhe a área da zona sobre a imagem.";
+    document.getElementById("saveZoneLabel").textContent = editing ? "Salvar zona" : "Criar zona";
+    document.getElementById("zoneEpiGroup").hidden = editing;
+    document.getElementById("zoneEpiUnavailable").hidden = !editing;
+
+    if (editing) {
+        cameraSelect.value = String(zone.id_camera);
+        document.getElementById("zoneName").value = zone.nome || "";
+        document.getElementById("zoneAllowed").checked = zone.permitido === true;
+
+        const area = {
+            x: Number(zone.x), y: Number(zone.y),
+            largura: Number(zone.largura), altura: Number(zone.altura)
+        };
+        const known = Object.values(area).every(Number.isFinite);
+        // A câmera precisa existir na lista real para o stream ser carregado.
+        zoneAreaEditor.load(
+            mappingCameras.some(camera => camera.id === zone.id_camera) ? Number(zone.id_camera) : null,
+            known ? area : null
+        );
+    } else {
+        loadZoneEpis();
+    }
+
+    modal.classList.add("active");
+    cameraSelect.focus();
 }
 
 function configureZoneCreation() {
@@ -131,8 +236,10 @@ function configureZoneCreation() {
     if (!modal || !form || !openButton || !saveButton) return;
     const cameraSelect = document.getElementById("zoneCamera");
     const areaEditor = new ZoneAreaEditor();
+    zoneAreaEditor = areaEditor;
     cameraSelect.addEventListener("change", () => {
         const cameraId = Number(cameraSelect.value);
+        // Troca manual de câmera invalida a área anterior, inclusive na edição.
         areaEditor.load(mappingCameras.some(camera => camera.id === cameraId) ? cameraId : null);
     });
     window.addEventListener("pagehide", () => areaEditor.clear());
@@ -141,13 +248,11 @@ function configureZoneCreation() {
         if (saveButton.disabled) return;
         areaEditor.clear();
         form.reset();
+        editingZoneId = null;
         modal.classList.remove("active");
         openButton.focus();
     };
-    openButton.addEventListener("click", () => {
-        modal.classList.add("active");
-        document.getElementById("zoneCamera").focus();
-    });
+    openButton.addEventListener("click", () => openZoneModal());
     document.getElementById("closeZoneModal").addEventListener("click", close);
     document.getElementById("cancelZoneModal").addEventListener("click", close);
     modal.addEventListener("click", event => {
@@ -173,6 +278,7 @@ function configureZoneCreation() {
         event.preventDefault();
         if (saveButton.disabled || !form.reportValidity()) return;
 
+        const editing = editingZoneId !== null;
         const fields = new FormData(form);
         const zone = {
             id_camera: Number(fields.get("id_camera")),
@@ -190,22 +296,29 @@ function configureZoneCreation() {
         }
         Object.assign(zone, selection);
 
+        // Um único EPI, somente na criação: PUT /zonas/{id} não altera "monitorar".
+        const epiId = editing ? "" : String(fields.get("id_epi") || "");
+        if (epiId) zone.id_epi = Number(epiId);
+
         saveButton.disabled = true;
         cameraSelect.disabled = true;
         areaEditor.setBusy(true);
         try {
-            const result = await apiPost("/zonas/registrar", zone);
+            const result = editing
+                ? await apiPut(`/zonas/${editingZoneId}`, zone)
+                : await apiPost("/zonas/registrar", zone);
             if (!result.ok) {
-                showToast(result.data?.error || result.data?.message || "Não foi possível criar a zona.", "danger");
+                showToast(result.data?.error || result.data?.message
+                    || (editing ? "Não foi possível salvar a zona." : "Não foi possível criar a zona."), "danger");
                 return;
             }
             form.reset();
             saveButton.disabled = false;
             close();
-            showToast("Zona criada com sucesso.");
+            showToast(editing ? "Zona atualizada com sucesso." : "Zona criada com sucesso.");
             await loadRiskZones();
         } catch {
-            showToast("Não foi possível criar a zona. Tente novamente.", "danger");
+            showToast(editing ? "Não foi possível salvar a zona. Tente novamente." : "Não foi possível criar a zona. Tente novamente.", "danger");
         } finally {
             saveButton.disabled = false;
             cameraSelect.disabled = false;
