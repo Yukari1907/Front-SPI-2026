@@ -805,16 +805,199 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         }
         check('Nova zona abre e fecha por X, Cancelar, fundo e Escape; modal legível e responsivo nos dois temas');
 
+        detections = { ...detections, connected: true };
+        detectionStatus = 200;
+        streamStatus = 200;
+        await page.evaluate(() => {
+            const original = apiVideoUrl;
+            let connection = 0;
+            window.apiVideoUrl = id => `${original(id)}?fixture=${++connection}`;
+        });
+        const area = page.locator('#zoneAreaOverlay');
+        const selected = page.locator('#zoneAreaRect');
+        const readArea = () => selected.evaluate(rect => Object.fromEntries(
+            ['x', 'y', 'width', 'height'].map(key => [key, Number(rect.getAttribute(key))])
+        ));
+        const near = (a, b, tolerance = 0.005) => assert(Math.abs(a - b) <= tolerance, `${a} ≈ ${b}`);
+        const assertArea = async expected => {
+            const actual = await readArea();
+            Object.keys(expected).forEach(key => near(actual[key], expected[key]));
+        };
+        const drawArea = async (start = [0.1, 0.2], end = [0.4, 0.6]) => {
+            await area.waitFor({ state: 'visible' });
+            await area.scrollIntoViewIfNeeded();
+            const bounds = await area.boundingBox();
+            await page.mouse.move(bounds.x + bounds.width * start[0], bounds.y + bounds.height * start[1]);
+            await page.mouse.down();
+            await page.mouse.move(bounds.x + bounds.width * end[0], bounds.y + bounds.height * end[1], { steps: 5 });
+            await page.mouse.up();
+        };
+        const assertEditorGeometry = async dimensions => {
+            const geometry = await page.evaluate(() => {
+                const box = el => {
+                    const { x, y, width, height } = el.getBoundingClientRect();
+                    return { x, y, width, height };
+                };
+                const image = document.getElementById('zoneFrame');
+                const modal = document.querySelector('#zoneModal .modal-box');
+                return { image: box(image), overlay: box(document.getElementById('zoneAreaOverlay')),
+                    rect: box(document.getElementById('zoneAreaRect')), natural: [image.naturalWidth, image.naturalHeight],
+                    fit: getComputedStyle(image).objectFit, overflow: modal.scrollWidth > modal.clientWidth,
+                    modal: box(modal), viewport: innerWidth };
+            });
+            assert.deepEqual(geometry.natural, dimensions);
+            for (const key of ['x', 'y', 'width', 'height']) near(geometry.image[key], geometry.overlay[key], 0.1);
+            near(geometry.image.width / geometry.image.height, dimensions[0] / dimensions[1], 0.01);
+            assert.equal(geometry.fit, 'contain');
+            assert.equal(geometry.overflow, false);
+            assert(geometry.modal.x >= 0 && geometry.modal.x + geometry.modal.width <= geometry.viewport);
+            const normalized = await readArea();
+            near(geometry.rect.x, geometry.image.x + normalized.x * geometry.image.width, 0.2);
+            near(geometry.rect.y, geometry.image.y + normalized.y * geometry.image.height, 0.2);
+            near(geometry.rect.width, normalized.width * geometry.image.width, 0.2);
+            near(geometry.rect.height, normalized.height * geometry.image.height, 0.2);
+        };
+
+        for (const width of [1440, 768, 390]) {
+            await page.setViewportSize({ width, height: width === 390 ? 700 : 1000 });
+            for (const theme of ['light', 'dark']) {
+                await page.evaluate(theme => document.documentElement.dataset.theme = theme, theme);
+                for (const dimensions of [[1920, 1080], [1080, 1920], [640, 480], [1280, 720], [900, 600]]) {
+                    streamDimensions = dimensions;
+                    await page.locator('#openZoneModal').click();
+                    assert.deepEqual(await page.locator('#zoneCamera option').evaluateAll(options => options.map(option => option.value)), ['', '1']);
+                    await page.locator('#zoneCamera').selectOption('1');
+                    await drawArea();
+                    await assertArea({ x: 0.1, y: 0.2, width: 0.3, height: 0.4 });
+                    await assertEditorGeometry(dimensions);
+                    await assertContrast(page.locator('#zoneAreaStatus'));
+                    assert.equal(await area.evaluate(el => getComputedStyle(el).touchAction), 'none');
+                    await page.locator('#cancelZoneModal').click();
+                    assert.equal(await page.locator('#zoneFrame').count(), 0);
+                }
+            }
+        }
+        check('Editor: 30 combinações de resolução, 1440/768/390 e temas; imagem inteira, SVG alinhado, câmeras da API e cleanup');
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        streamDimensions = [1920, 1080];
+        await page.locator('#openZoneModal').click();
+        await page.locator('#zoneCamera').selectOption('1');
+        assert.equal(await page.locator('#zoneX, #zoneY, #zoneWidth, #zoneHeight').count(), 0);
+        for (const [start, end] of [
+            [[0.1, 0.2], [0.7, 0.8]], [[0.7, 0.8], [0.1, 0.2]],
+            [[0.7, 0.2], [0.1, 0.8]], [[0.1, 0.8], [0.7, 0.2]]
+        ]) {
+            await drawArea(start, end);
+            await assertArea({ x: 0.1, y: 0.2, width: 0.6, height: 0.6 });
+        }
+        const beforeResize = await readArea();
+        for (const width of [390, 768, 1440]) {
+            await page.setViewportSize({ width, height: 800 });
+            await assertEditorGeometry(streamDimensions);
+            assert.deepEqual(await readArea(), beforeResize);
+        }
+        await drawArea([0.2, 0.3], [1.2, 1.2]);
+        await assertArea({ x: 0.2, y: 0.3, width: 0.8, height: 0.7 });
+        await drawArea([0.8, 0.7], [-0.2, -0.2]);
+        await assertArea({ x: 0, y: 0, width: 0.8, height: 0.7 });
+        await page.locator('#resetZoneArea').click();
+        assert.equal(await selected.isVisible(), false);
+        await drawArea([0.3, 0.3], [0.301, 0.301]);
+        assert.equal(await selected.isVisible(), false);
+        assert.match(await page.locator('#zoneAreaStatus').innerText(), /muito pequena/);
+        await page.locator('#zoneName').fill('Área sem seleção');
+        await page.locator('#saveZoneButton').click();
+        assert.equal(zoneRequests.length, 0);
+        check('Editor: quatro direções, normalização, resize, clamp em todos os limites, redefinir e mínimo inválido');
+
+        // Touch real pelo protocolo do Chromium, incluindo captura fora da imagem.
+        const cdp = await context.newCDPSession(page);
+        await page.setViewportSize({ width: 390, height: 700 });
+        await area.scrollIntoViewIfNeeded();
+        const touchBounds = await area.boundingBox();
+        const touchPoint = (x, y) => ({ x: touchBounds.x + touchBounds.width * x, y: touchBounds.y + touchBounds.height * y });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touchPoint(0.1, 0.2)] });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touchPoint(0.7, 0.8)] });
+        assert(await selected.isVisible());
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        await assertArea({ x: 0.1, y: 0.2, width: 0.6, height: 0.6 });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touchPoint(0.2, 0.3)] });
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+        assert.equal(await selected.isVisible(), false);
+        await cdp.detach();
+        await page.setViewportSize({ width: 1440, height: 1000 });
+        check('Editor: arraste touch real, preview durante arraste e pointercancel');
+
+        // Câmera B fornecida exclusivamente pela API simulada de teste.
+        cameraListData = [...cameras, { id: 2, nome: 'Câmera B', id_setor: 1 }];
+        await page.evaluate(async () => {
+            sessionStorage.clear();
+            await loadMapeamento();
+        });
+        await page.locator('#zoneCamera').selectOption('1');
+        await drawArea();
+        let releaseFrame;
+        streamGate = new Promise(resolve => { releaseFrame = resolve; });
+        const pendingVideo = page.waitForRequest(request => new URL(request.url()).pathname === '/video/2');
+        await page.locator('#zoneCamera').selectOption('2');
+        await pendingVideo;
+        assert.equal(await selected.isVisible(), false);
+        assert.equal(await area.isVisible(), false);
+        await page.locator('#saveZoneButton').click();
+        assert.equal(zoneRequests.length, 0);
+        await page.evaluate(() => {
+            window.oldZoneImage = document.getElementById('zoneFrame');
+            window.oldZoneLoad = oldZoneImage.onload;
+            window.oldZoneError = oldZoneImage.onerror;
+        });
+        streamGate = null;
+        streamDimensions = [1080, 1920];
+        await page.locator('#zoneCamera').selectOption('1');
+        await drawArea();
+        releaseFrame();
+        await page.evaluate(() => { oldZoneLoad(); oldZoneError(); });
+        await assertEditorGeometry(streamDimensions);
+        assert(await selected.isVisible());
+        // Voltar a B também não reativa callbacks da primeira conexão de B.
+        await page.locator('#zoneCamera').selectOption('2');
+        await drawArea();
+        await page.evaluate(() => { oldZoneLoad(); oldZoneError(); });
+        assert(await selected.isVisible());
+        check('Editor: troca limpa seleção, ausência de frame bloqueia envio e callbacks atrasados B → A → B são ignorados');
+
+        streamStatus = 503;
+        await page.locator('#zoneCamera').selectOption('1');
+        await page.waitForFunction(() => document.getElementById('zoneAreaStatus').textContent.includes('indisponível'));
+        await page.locator('#saveZoneButton').click();
+        assert.equal(zoneRequests.length, 0);
+        assert.equal(await area.isVisible(), false);
+        streamStatus = 200;
+        await page.locator('#retryZoneFrame').click();
+        await drawArea();
+        detections = { ...detections, connected: false };
+        await page.waitForFunction(() => document.getElementById('zoneAreaStatus').textContent.includes('indisponível'));
+        assert.equal(await selected.isVisible(), false);
+        assert.equal(await page.locator('#zoneFrame').count(), 0);
+        detections = { ...detections, connected: true };
+        await page.locator('#retryZoneFrame').click();
+        await drawArea();
+        await page.locator('#cancelZoneModal').click();
+        // Restaura as câmeras da API para preservar as regressões anteriores.
+        cameraListData = null;
+        await page.evaluate(async () => { sessionStorage.clear(); await loadMapeamento(); });
+        check('Editor: HTTP 503, perda de conexão após seleção, bloqueio de cadastro e recuperação por Tentar novamente');
+
         await page.locator('#openZoneModal').click();
         await page.locator('#saveZoneButton').click();
         assert.equal(zoneRequests.length, 0);
         await page.locator('#zoneCamera').selectOption('1');
         await page.locator('#zoneName').fill('  Zona <img src=x onerror=alert(1)>  ');
-        for (const [selector, value] of [['#zoneX', '0.8'], ['#zoneY', '0.2'], ['#zoneWidth', '0.3'], ['#zoneHeight', '0.4']]) await page.locator(selector).fill(value);
+        await area.waitFor({ state: 'visible' });
         await page.locator('#saveZoneButton').click();
         assert.equal(zoneRequests.length, 0);
-        assert.match(await page.locator('#toastContainer').innerText(), /inteiramente dentro do quadro/);
-        await page.locator('#zoneX').fill('0.1');
+        assert.match(await page.locator('#toastContainer').innerText(), /Desenhe uma área válida/);
+        await drawArea();
+        const submittedArea = await readArea();
         for (const status of [400, 0]) {
             createZoneStatus = status;
             const count = zoneRequests.length;
@@ -829,7 +1012,8 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.locator('#saveZoneButton').click();
         await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active') && document.getElementById('riskZonesList').textContent.includes('Zona <img'));
         assert.deepEqual(zoneRequests.at(-1), { method: 'POST', body: {
-            id_camera: 1, nome: 'Zona <img src=x onerror=alert(1)>', x: 0.1, y: 0.2, largura: 0.3, altura: 0.4, permitido: false
+            id_camera: 1, nome: 'Zona <img src=x onerror=alert(1)>', x: submittedArea.x, y: submittedArea.y,
+            largura: submittedArea.width, altura: submittedArea.height, permitido: false
         } });
         assert.equal(await page.locator('#riskZonesList img').count(), 0);
         assert.equal(await page.locator('#zoneName').inputValue(), '');
@@ -837,6 +1021,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.locator('#zoneCamera').selectOption('1');
         await page.locator('#zoneName').fill('Passagem permitida');
         await page.locator('#zoneAllowed').check();
+        await drawArea();
         await page.locator('#saveZoneButton').click();
         await page.waitForFunction(() => document.getElementById('riskZonesList').textContent.includes('Passagem permitida'));
         assert.equal(zoneRequests.at(-1).body.permitido, true);
