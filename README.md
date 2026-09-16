@@ -27,8 +27,9 @@ As chamadas usam `credentials: 'include'` para enviar o cookie de sessão Flask.
 - Login, validação de sessão e logout.
 - Inventário de EPIs: listar, criar, editar e excluir.
 - Alertas: listar e marcar como resolvido.
-- Monitoramento: câmeras, setores, stream MJPEG e polling de detecções.
-- Mapeamento: setores e câmeras.
+- Monitoramento: câmeras, setores, stream MJPEG, polling de detecções e edição de câmera
+  (nome, IP, setor, rotação e espelhamento) para admin/supervisor.
+- Mapeamento: setores, câmeras, criação de zona com EPI obrigatório e edição de zona.
 - Dashboard: alertas recentes, alertas de hoje, estatísticas por categoria/dia e câmeras online.
 - Administração: cadastro de usuário com `POST /signup`.
 
@@ -37,7 +38,13 @@ As chamadas usam `credentials: 'include'` para enviar o cookie de sessão Flask.
 - Administração: somente cadastro por `POST /signup`; listagem, edição, bloqueio e exclusão indisponíveis.
 - Relatórios: alertas dos últimos 30 dias, resolução e distribuição por setor calculados a partir das APIs reais; conformidade e disponibilidade histórica indisponíveis.
 - Controle de EPIs: estatísticas reais de alertas por categoria; colaboradores e conformidade indisponíveis.
-- Mapeamento: planta ilustrativa, câmeras/setores/zonas reais, criação visual de zonas e contador online.
+- Mapeamento: planta ilustrativa, câmeras/setores/zonas reais, criação e edição visual de zonas e contador online.
+- Zona: o backend aceita um único `id_epi` e apenas na criação; nenhum GET de zona devolve o EPI
+  associado e `PUT /zonas/{id}` não altera essa associação, por isso o campo não aparece na edição.
+- Câmera: `GET /cameras` não devolve rotação nem espelhamento; o formulário só reapresenta os valores
+  que o próprio backend confirmou em um PUT desta sessão e avisa que o envio substitui o gravado.
+- Fonte da câmera: não há suporte a webcam configurável. O campo `ip` é a única fonte e o worker do
+  servidor apenas faz um fallback automático para índices locais quando o RTSP falha.
 - Perfil: leitura de `/session`, sem edição local. Configurações: somente tema neste navegador.
 - Login: cookie como fonte de autenticação; dados locais antigos não autorizam acesso.
 

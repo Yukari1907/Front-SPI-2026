@@ -146,6 +146,30 @@ function apiVideoUrl(cameraId) {
 }
 
 /**
+ * Chave do cache de uma rota: separa por backend e por usuário validado,
+ * para que um cache antigo nunca seja servido a outra sessão.
+ * @param {string} path
+ * @returns {string}
+ */
+function apiCacheKey(path) {
+    const userId = typeof getSession === "function" ? getSession()?.userId : "";
+    return `visaoepi_cache:${API_BASE_URL}:${userId}:${path}`;
+}
+
+/**
+ * Invalida o cache de uma rota específica, após uma alteração persistida
+ * no backend (ex.: PUT /cameras/{id} muda o que GET /cameras devolve).
+ * @param {string} path
+ */
+function apiClearCached(path) {
+    try {
+        sessionStorage.removeItem(apiCacheKey(path));
+    } catch {
+        // sessionStorage indisponível — não há cache a invalidar
+    }
+}
+
+/**
  * GET com cache curto em sessionStorage (sobrevive à navegação entre páginas
  * desta app multi-page, ao contrário de uma variável JS solta). Usado para
  * chamadas repetidas entre páginas, como /cameras e /setores.
@@ -154,8 +178,7 @@ function apiVideoUrl(cameraId) {
  * @returns {Promise<{ok: boolean, status: number, data: any}>}
  */
 async function apiGetCached(path, ttlMs) {
-    const userId = typeof getSession === "function" ? getSession()?.userId : "";
-    const cacheKey = `visaoepi_cache:${API_BASE_URL}:${userId}:${path}`;
+    const cacheKey = apiCacheKey(path);
 
     try {
         const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
@@ -187,3 +210,4 @@ window.apiPut = apiPut;
 window.apiDelete = apiDelete;
 window.apiVideoUrl = apiVideoUrl;
 window.apiGetCached = apiGetCached;
+window.apiClearCached = apiClearCached;

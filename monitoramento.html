@@ -75,6 +75,11 @@
             rel="noopener noreferrer">
                 Revisão de Dataset
             </a>
+
+            <button class="btn secondary" id="openCameraModal" type="button" data-permission="cameras:edit" disabled>
+                <i class="fa-solid fa-sliders"></i>
+                Editar câmera
+            </button>
         </div>
 
         <div id="videoContainer">
@@ -111,6 +116,69 @@
 </div>
 
     </main>
+
+<div class="modal" id="cameraModal" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle">
+    <div class="modal-box" style="width:min(720px,96vw)">
+        <button class="modal-close" id="closeCameraModal" type="button" aria-label="Fechar">&times;</button>
+
+        <div class="page-title" style="margin-bottom:20px">
+            <h2 id="cameraModalTitle">Editar câmera</h2>
+            <p class="text-muted" id="cameraModalHint">Configuração da câmera selecionada.</p>
+        </div>
+
+        <form id="cameraForm">
+            <div class="modal-grid">
+                <div class="form-group">
+                    <label for="cameraName">Nome</label>
+                    <input id="cameraName" name="nome" type="text" maxlength="45" placeholder="Ex.: Entrada da prensa">
+                </div>
+
+                <div class="form-group">
+                    <label for="cameraIp">Endereço / IP da câmera</label>
+                    <input id="cameraIp" name="ip" type="text" maxlength="255" required
+                        placeholder="Ex.: rtsp://10.20.30.41:554/stream">
+                    <small class="text-muted">Visível apenas nesta tela de configuração.</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="cameraSector">Setor</label>
+                    <select id="cameraSector" name="id_setor" required></select>
+                </div>
+
+                <div class="form-group">
+                    <label for="cameraRotation">Rotação</label>
+                    <select id="cameraRotation" name="rotacao">
+                        <option value="0">0°</option>
+                        <option value="90">90°</option>
+                        <option value="180">180°</option>
+                        <option value="270">270°</option>
+                    </select>
+                </div>
+            </div>
+
+            <label style="display:flex;align-items:center;gap:10px;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft)">
+                <input id="cameraMirrorH" name="espelhar_horizontal" type="checkbox">
+                <span><strong>Espelhar horizontalmente</strong></span>
+            </label>
+
+            <label style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft)">
+                <input id="cameraMirrorV" name="espelhar_vertical" type="checkbox">
+                <span><strong>Espelhar verticalmente</strong></span>
+            </label>
+
+            <p class="text-muted" id="cameraTransformNote" style="margin-top:12px"></p>
+            <p id="cameraFormError" class="text-muted" role="status" aria-live="polite" style="color:var(--danger)" hidden></p>
+
+            <div class="modal-footer">
+                <button class="btn secondary" id="cancelCameraModal" type="button">Cancelar</button>
+                <button class="btn" id="saveCameraButton" type="submit">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Salvar câmera
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 
     <div id="toastContainer" class="toast-container"></div>
 </body>

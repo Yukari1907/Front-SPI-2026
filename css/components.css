@@ -636,6 +636,10 @@ body[data-page="alerts"] .table-wrap td:nth-child(3){
 
 .modal.active{display:flex}
 
+/* O atributo hidden precisa vencer o display dos componentes internos
+   (.form-group, .btn) usados dentro dos modais. */
+.modal [hidden]{display:none}
+
 .modal-box{
     position:relative;
     width:min(940px,96vw);
