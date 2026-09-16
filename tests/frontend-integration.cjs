@@ -50,7 +50,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                 calls.push(url.pathname + url.search);
                 if (!['GET', 'OPTIONS'].includes(route.request().method())) mutations.push(url.pathname);
                 let status = 200, data;
-                if (url.pathname === '/session') data = {};
+                if (url.pathname === '/session') data = { authenticated: true, user: { id: 1, nome: 'Teste', perfil: 'admin', admin: true, ativo: true } };
                 else if (url.pathname === '/cameras/status') {
                     if (cameraStatus === 0) return route.abort('failed');
                     data = cameras; status = cameraStatus;
@@ -719,7 +719,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.waitForFunction(() => document.getElementById('dashboardCamerasOnline').textContent === '1/3');
         assert.match(await page.locator('#dashboardEvents').innerText(), /Não informada[\s\S]*Médio[\s\S]*Crítico/);
         assert.equal(await page.locator('#dashboardEvents .badge.danger').innerText(), 'Crítico');
-        assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['—', '—', '—', '1/3']);
+        assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['—', '—', String(alertData.filter(alert => alert.data?.slice(0, 10) === new Date().toLocaleDateString('sv-SE')).length), '1/3']);
         cameras = [];
         await page.evaluate(() => loadDashboardKpis());
         assert.equal(await page.locator('#dashboardCamerasOnline').innerText(), '0/0');
@@ -735,7 +735,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.waitForFunction(() => document.getElementById('mapCamerasOnline').textContent === '1 câmera online');
         await page.waitForFunction(() => document.getElementById('riskZonesList').textContent.includes('Prensa hidráulica'));
         assert.equal(await page.locator('#factoryMap > button').count(), 1);
-        assert.equal(await page.locator('#factoryMap > button').getAttribute('title'), 'Câmera 1 — IP: local');
+        assert.equal(await page.locator('#factoryMap > button').getAttribute('title'), 'Câmera 1');
         assert.equal(await page.locator('#factoryMap > button').evaluate(el => el.style.background), 'rgb(49, 85, 245)');
         assert.match(await page.locator('#sectorList').innerText(), /Produção[\s\S]*1 câmera/);
         assert.match(await page.locator('.mapping-grid aside').innerText(), /Zonas de Risco[\s\S]*Prensa hidráulica[\s\S]*Área de carga/);
@@ -1075,7 +1075,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
 
         await page.evaluate(() => {
             renderSectorList({ status: 0 }, { data: [] });
-            renderFactoryMap({ data: [] });
+            renderFactoryMap({ ok: true, status: 200, data: [] });
         });
         assert.match(await page.locator('#sectorList').innerText(), /Backend indisponível/);
         assert.match(await page.locator('#factoryMap').innerText(), /Nenhuma câmera cadastrada/);
@@ -1085,7 +1085,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         check('Fallback e lista vazia de setores preservados; planta permanece sem câmeras');
         assert.equal(calls.some(url => /limit|offset|page|periodo=1/.test(url)), false);
         assert.deepEqual(errors, []);
-        check('Sem parâmetros inventados, KPI de hoje fora do escopo e sem exceções JS');
+        check('Sem parâmetros inventados e sem exceções JS');
         console.log(JSON.stringify({ passed: passed.length, pageErrors: errors, backend: 'simulado' }));
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -42,7 +42,7 @@ const root = path.resolve(__dirname, '..');
             if (url.origin === origin) return route.continue();
             if (url.port === '5000') {
                 let data = [];
-                if (url.pathname === '/session') data = {};
+                if (url.pathname === '/session') data = { authenticated: true, user: { id: 1, nome: 'Teste', perfil: 'admin', admin: true, ativo: true } };
                 else if (url.pathname === '/cameras' || url.pathname === '/cameras/status') data = [{ id: 1, nome: 'A', status: 'Ativo' }, { id: 2, nome: 'B', status: 'Ativo' }];
                 else if (url.pathname.startsWith('/detections/')) {
                     data = { connected };

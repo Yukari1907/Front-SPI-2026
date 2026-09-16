@@ -26,7 +26,7 @@
         <div class="topbar">
             <div class="page-title">
                 <h1>Controle de EPIs</h1>
-                <p class="text-muted">Gerencie colaboradores, entregas, devoluções e conformidade.</p>
+                <p class="text-muted">Consulte os dados disponíveis de EPIs e alertas.</p>
             </div>
 
             
@@ -59,15 +59,15 @@
 
         
 <div class="grid kpi-grid">
-    <article class="card kpi"><i class="fa-solid fa-users"></i><h3>Colaboradores</h3><strong>64</strong><p class="text-muted">Monitorados hoje</p></article>
-    <article class="card kpi"><i class="fa-solid fa-circle-check"></i><h3>Conformes</h3><strong>58</strong><p class="text-muted">Uso correto</p></article>
-    <article class="card kpi"><i class="fa-solid fa-triangle-exclamation"></i><h3>Não Conformes</h3><strong>6</strong><p class="text-muted">Requerem atenção</p></article>
-    <article class="card kpi"><i class="fa-solid fa-graduation-cap"></i><h3>Treinamentos</h3><strong>9</strong><p class="text-muted">Pendentes</p></article>
+    <article class="card kpi"><i class="fa-solid fa-users"></i><h3>Colaboradores</h3><strong>—</strong><p class="text-muted">Dados indisponíveis</p></article>
+    <article class="card kpi"><i class="fa-solid fa-circle-check"></i><h3>Conformes</h3><strong>—</strong><p class="text-muted">Dados indisponíveis</p></article>
+    <article class="card kpi"><i class="fa-solid fa-triangle-exclamation"></i><h3>Não Conformes</h3><strong>—</strong><p class="text-muted">Dados indisponíveis</p></article>
+    <article class="card kpi"><i class="fa-solid fa-graduation-cap"></i><h3>Treinamentos</h3><strong>—</strong><p class="text-muted">Dados indisponíveis</p></article>
 </div>
 
 <div class="grid charts-grid">
     <article class="card"><div class="section-title"><h2>Conformidade por Setor</h2></div><div class="chart-box"><canvas id="sectorChart"></canvas></div></article>
-    <article class="card"><div class="section-title"><h2>Não conformidades por EPI</h2></div><div class="chart-box"><canvas id="ppeIssueChart"></canvas></div></article>
+    <article class="card"><div class="section-title"><h2>Alertas por categoria de EPI</h2></div><div class="chart-box"><canvas id="ppeIssueChart"></canvas></div></article>
 </div>
 
 <article class="card table-card">
@@ -96,18 +96,18 @@
         </div>
 
         <div class="worker-profile">
-            <div class="avatar worker-avatar" id="workerAvatar">AS</div>
+            <div class="avatar worker-avatar" id="workerAvatar">—</div>
             <div>
-                <h3 id="workerName">Ana Souza</h3>
-                <p class="text-muted" id="workerSector">Produção</p>
+                <h3 id="workerName">—</h3>
+                <p class="text-muted" id="workerSector">—</p>
             </div>
         </div>
 
         <div class="worker-detail-grid">
-            <div class="worker-detail-card"><span>Última verificação</span><strong id="workerLastCheck">14:32</strong></div>
-            <div class="worker-detail-card"><span>Status</span><strong id="workerStatus">Conforme</strong></div>
-            <div class="worker-detail-card"><span>Matrícula</span><strong id="workerRegistration">COL-001</strong></div>
-            <div class="worker-detail-card"><span>Turno</span><strong id="workerShift">Manhã</strong></div>
+            <div class="worker-detail-card"><span>Última verificação</span><strong id="workerLastCheck">—</strong></div>
+            <div class="worker-detail-card"><span>Status</span><strong id="workerStatus">—</strong></div>
+            <div class="worker-detail-card"><span>Matrícula</span><strong id="workerRegistration">—</strong></div>
+            <div class="worker-detail-card"><span>Turno</span><strong id="workerShift">—</strong></div>
         </div>
 
         <div class="card" style="box-shadow:none;margin-top:20px">
@@ -117,7 +117,7 @@
 
         <div class="modal-footer">
             <button class="btn secondary" id="closeWorkerModalFooter" type="button">Fechar</button>
-            <button class="btn" type="button" id="registerWorkerAction"><i class="fa-solid fa-clipboard-check"></i>Registrar ação</button>
+            <button class="btn" type="button" id="registerWorkerAction" disabled title="Registro de ações indisponível"><i class="fa-solid fa-clipboard-check"></i>Registrar ação</button>
         </div>
     </div>
 </div>

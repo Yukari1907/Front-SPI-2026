@@ -1,117 +1,29 @@
 
 "use strict";
 
-const SESSION_KEY="visaoepi_session";
-const PROFILE_KEY="visaoepi_profile";
+// Permissões de escrita confirmadas nos decorators do backend; leituras exigem sessão.
+const READ_PAGES = ["dashboard", "monitoring", "alerts", "inventory", "ppe", "mapping", "reports", "settings", "profile", "about"];
+let verifiedSession = null;
+let verifiedProfile = null;
+let resolveSessionReady;
+window.sessionReady = new Promise(resolve => { resolveSessionReady = resolve; });
 
-const ROLE_PERMISSIONS={
-    "Administrador":{
-        pages:[
-            "dashboard",
-            "monitoring",
-            "alerts",
-            "inventory",
-            "ppe",
-            "mapping",
-            "reports",
-            "admin",
-            "settings",
-            "profile",
-            "about"
-        ],
-        actions:[
-            "users:create",
-            "users:view",
-            "users:edit",
-            "users:status",
-            "users:delete",
-            "inventory:create",
-            "inventory:edit",
-            "inventory:delete",
-            "inventory:export",
-            "ppe:manage",
-            "alerts:manage",
-            "settings:manage"
-        ]
-    },
-
-    "Supervisor":{
-        pages:[
-            "dashboard",
-            "monitoring",
-            "alerts",
-            "inventory",
-            "ppe",
-            "mapping",
-            "reports",
-            "profile",
-            "about"
-        ],
-        actions:[
-            "users:view",
-            "inventory:create",
-            "inventory:edit",
-            "inventory:export",
-            "ppe:manage",
-            "alerts:manage"
-        ]
-    },
-
-    "Técnico de Segurança":{
-        pages:[
-            "dashboard",
-            "monitoring",
-            "alerts",
-            "ppe",
-            "mapping",
-            "reports",
-            "profile",
-            "about"
-        ],
-        actions:[
-            "users:view",
-            "ppe:manage",
-            "alerts:manage"
-        ]
-    },
-
-    "Operador":{
-        pages:[
-            "dashboard",
-            "monitoring",
-            "alerts",
-            "profile",
-            "about"
-        ],
-        actions:[
-            "alerts:view"
-        ]
-    }
-};
-
-function getSession(){
-    return JSON.parse(
-        localStorage.getItem(SESSION_KEY)||
-        sessionStorage.getItem(SESSION_KEY)||
-        "null"
-    );
+function getSession() { return verifiedSession; }
+function getProfile() {
+    return verifiedProfile || { name: "—", email: "—", role: "—", unit: "", phone: "" };
 }
-
-function getProfile(){
-    return JSON.parse(localStorage.getItem(PROFILE_KEY)||"null")||{
-        name:"Administrador",
-        email:"admin@visaoepi.com",
-        role:"Administrador",
-        unit:"Matriz"
+function getCurrentRole() { return verifiedSession?.role || ""; }
+function getRolePermissions(role = getCurrentRole()) {
+    if (!verifiedSession) return { pages: [], actions: [] };
+    const normalized = String(role).trim().toLowerCase();
+    const admin = verifiedSession.admin === true || ["admin", "administrador"].includes(normalized);
+    const manager = admin || normalized === "supervisor";
+    return {
+        pages: admin ? [...READ_PAGES, "admin"] : READ_PAGES,
+        actions: ["alerts:view", "alerts:manage", "inventory:export",
+            ...(manager ? ["inventory:create", "inventory:edit", "inventory:delete"] : []),
+            ...(admin ? ["users:create"] : [])]
     };
-}
-
-function getCurrentRole(){
-    return getSession()?.role||getProfile()?.role||"Operador";
-}
-
-function getRolePermissions(role=getCurrentRole()){
-    return ROLE_PERMISSIONS[role]||ROLE_PERMISSIONS["Operador"];
 }
 
 function canAccessPage(page,role=getCurrentRole()){
@@ -120,6 +32,22 @@ function canAccessPage(page,role=getCurrentRole()){
 
 function canPerform(action,role=getCurrentRole()){
     return getRolePermissions(role).actions.includes(action);
+}
+
+// Estado explícito para gráficos sem dados ou sem biblioteca disponível.
+function showChartState(id, message) {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    canvas.hidden = true;
+    canvas.style.display = "none";
+    let state = document.getElementById(`${id}State`);
+    if (!state) {
+        state = document.createElement("p");
+        state.id = `${id}State`;
+        state.className = "empty";
+        canvas.parentElement.appendChild(state);
+    }
+    state.textContent = message;
 }
 
 function escapeHtml(value){
@@ -140,20 +68,16 @@ function initials(name){
         .join("");
 }
 
-async function logout(){
-    try {
-        // Encerra a sessão no backend antes de limpar o storage local
-        if (typeof apiPost === "function") {
-            await apiPost("/logout", {});
-        }
-    } catch(e) {
-        // Mesmo com falha no backend, o logout local é executado
-        console.warn("[Logout] Falha ao comunicar com o backend:", e);
-    } finally {
-        localStorage.removeItem(SESSION_KEY);
-        sessionStorage.removeItem(SESSION_KEY);
-        window.location.href="login.html";
+async function logout() {
+    const result = await apiPost("/logout", {});
+    if (!result.ok) {
+        showToast("Não foi possível encerrar a sessão. Tente novamente.", "danger");
+        return;
     }
+    verifiedSession = null;
+    verifiedProfile = null;
+    clearApiSession();
+    window.location.href = "login.html";
 }
 
 function showToast(message,type="success"){
@@ -250,7 +174,7 @@ function createUserChip(profile){
 
     container.innerHTML=`
         <button id="userChipButton" type="button">
-            <span class="avatar">${initials(profile.name)}</span>
+            <span class="avatar">${escapeHtml(initials(profile.name))}</span>
 
             <span class="user-copy">
                 <strong>${escapeHtml(profile.name)}</strong><br>
@@ -673,72 +597,32 @@ function configureGlobalSearch(){
 
 
 document.addEventListener("DOMContentLoaded", async () => {
-    if (!window.location.pathname.endsWith("login.html")) {
-        const localSession = getSession();
-
-        // Verificação rápida local — se não há sessão local, redireciona imediatamente
-        if (!localSession?.authenticated) {
-            window.location.href = "login.html";
-            return;
-        }
-
-        // Validação da sessão no backend (GET /session)
-        // Sincroniza dados do perfil e confirma que o cookie ainda é válido
-        if (typeof apiGet === "function") {
-            try {
-                const result = await apiGet("/session");
-
-                if (!result.ok || result.status === 401) {
-                    // Sessão expirada no servidor
-                    localStorage.removeItem(SESSION_KEY);
-                    sessionStorage.removeItem(SESSION_KEY);
-                    window.location.href = "login.html";
-                    return;
-                }
-
-                // Sincroniza dados do perfil com os dados reais do servidor
-                if (result.data?.user) {
-                    const serverUser = result.data.user;
-                    const currentProfile = getProfile();
-                    const updatedProfile = {
-                        ...currentProfile,
-                        name: [serverUser.nome, serverUser.sobrenome].filter(Boolean).join(" ") || currentProfile.name,
-                        email: serverUser.email || currentProfile.email,
-                        role: serverUser.perfil || currentProfile.role,
-                        unit: serverUser.unidade || currentProfile.unit
-                    };
-                    localStorage.setItem(PROFILE_KEY, JSON.stringify(updatedProfile));
-
-                    // Atualiza sessão local com dados atualizados
-                    const updatedSession = {
-                        ...localSession,
-                        name: updatedProfile.name,
-                        email: updatedProfile.email,
-                        role: updatedProfile.role,
-                        unit: updatedProfile.unit
-                    };
-                    const storage = localStorage.getItem(SESSION_KEY) ? localStorage : sessionStorage;
-                    storage.setItem(SESSION_KEY, JSON.stringify(updatedSession));
-                }
-            } catch (e) {
-                // Falha de rede: mantém a sessão local sem redirecionar
-                console.warn("[Session] Não foi possível validar sessão no servidor:", e);
-            }
-        }
-
-        const allowed = applyRolePermissions();
-
-        if (!allowed) {
-            return;
-        }
-
-        createUserChip(getProfile());
-        configureNotifications();
-        configureGlobalSearch();
+    if (window.location.pathname.endsWith("login.html")) { resolveSessionReady(true); return; }
+    const result = await apiGet("/session");
+    const user = result.data?.user;
+    if (result.status === 401) {
+        clearApiSession();
+        resolveSessionReady(false);
+        window.location.href = "login.html";
+        return;
     }
-
+    if (!result.ok || result.data?.authenticated !== true || !user?.id || user.ativo === false) {
+        resolveSessionReady(false);
+        document.querySelector(".main").innerHTML = '<div class="card"><h1>Sessão indisponível</h1><p>Não foi possível validar sua sessão. Tente recarregar a página.</p><a href="login.html">Voltar ao login</a></div>';
+        return;
+    }
+    verifiedProfile = {
+        name: [user.nome, user.sobrenome].filter(Boolean).join(" ") || "—",
+        email: user.email || "—", role: user.perfil || "—", unit: user.unidade || "", phone: user.telefone || ""
+    };
+    verifiedSession = { authenticated: true, userId: user.id, role: user.perfil, admin: user.admin === true };
+    const allowed = applyRolePermissions();
+    resolveSessionReady(allowed);
+    if (!allowed) return;
+    createUserChip(getProfile());
+    configureNotifications();
+    configureGlobalSearch();
     const currentPage = document.body.dataset.page;
-
     document.querySelectorAll(".nav a[data-page]").forEach(link => {
         link.classList.toggle("active", link.dataset.page === currentPage);
     });

@@ -11,7 +11,14 @@
  * Altere conforme o ambiente (desenvolvimento/produção).
  */
 
-const API_BASE_URL = "http://localhost:5000";
+const API_BASE_URL = (window.SPI_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
+
+function clearApiSession() {
+    localStorage.removeItem("visaoepi_session");
+    localStorage.removeItem("visaoepi_profile");
+    sessionStorage.removeItem("visaoepi_session");
+    Object.keys(sessionStorage).filter(key => key.startsWith("visaoepi_cache:")).forEach(key => sessionStorage.removeItem(key));
+}
 
 /**
  * Executa uma requisição HTTP ao backend.
@@ -56,13 +63,12 @@ async function apiRequest(path, options = {}) {
 
         // Sessão expirada → redireciona para login (exceto na própria rota de login)
         if (response.status === 401 && !path.includes("/login") && !path.includes("/session")) {
-            localStorage.removeItem("visaoepi_session");
-            sessionStorage.removeItem("visaoepi_session");
+            clearApiSession();
             window.location.href = "login.html";
             return { ok: false, status: 401, data };
         }
 
-        return { ok: response.ok, status: response.status, data };
+        return { ok: response.ok && (response.status === 204 || data !== null), status: response.status, data };
 
     } catch (error) {
         // Falha de rede ou backend indisponível
@@ -148,7 +154,8 @@ function apiVideoUrl(cameraId) {
  * @returns {Promise<{ok: boolean, status: number, data: any}>}
  */
 async function apiGetCached(path, ttlMs) {
-    const cacheKey = `visaoepi_cache:${path}`;
+    const userId = typeof getSession === "function" ? getSession()?.userId : "";
+    const cacheKey = `visaoepi_cache:${API_BASE_URL}:${userId}:${path}`;
 
     try {
         const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");

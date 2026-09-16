@@ -6,46 +6,8 @@
  *
  * Não armazena senha em localStorage ou sessionStorage.
  * A sessão é gerenciada pelo backend (Flask session + cookie).
- * O frontend armazena apenas dados de exibição (nome, email, perfil) para
- * uso na UI — sem informações sensíveis.
+ * Os dados de exibição são recuperados de GET /session em cada página.
  */
-
-const SESSION_KEY = "visaoepi_session";
-const PROFILE_KEY = "visaoepi_profile";
-
-/**
- * Salva dados não-sensíveis do usuário para uso na interface.
- * Nunca inclui senha. A sessão real é mantida pelo cookie do backend.
- */
-function saveProfileFromApiUser(user, remember) {
-    const profileData = {
-        name: [user.nome, user.sobrenome].filter(Boolean).join(" "),
-        email: user.email,
-        role: user.perfil,
-        unit: user.unidade || "",
-        telefone: user.telefone || ""
-    };
-
-    // Armazena dados de sessão local para controle de permissões da UI
-    const sessionData = {
-        authenticated: true,
-        userId: user.id,
-        email: user.email,
-        name: profileData.name,
-        role: user.perfil,
-        unit: user.unidade || "",
-        loginAt: new Date().toISOString()
-    };
-
-    // Perfil sempre em localStorage (persiste entre janelas/abas)
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(profileData));
-
-    // Sessão: localStorage se "lembrar", sessionStorage se não
-    const storage = remember ? localStorage : sessionStorage;
-    localStorage.removeItem(SESSION_KEY);
-    sessionStorage.removeItem(SESSION_KEY);
-    storage.setItem(SESSION_KEY, JSON.stringify(sessionData));
-}
 
 document.addEventListener("DOMContentLoaded", () => {
     const form = document.getElementById("loginForm");
@@ -74,7 +36,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const email = form.email.value.trim().toLowerCase();
         const password = form.password.value;
-        const remember = document.getElementById("rememberLogin").checked;
 
         // Feedback imediato ao usuário
         const submitButton = form.querySelector('[type="submit"]');
@@ -97,6 +58,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 // Login bem-sucedido
                 const user = result.data?.user;
 
+                if (!user?.id) {
+                    message.textContent = "Resposta de autenticação inválida.";
+                    return;
+                }
                 if (user) {
                     // Verifica se o usuário está ativo
                     if (user.ativo === false) {
@@ -105,7 +70,7 @@ document.addEventListener("DOMContentLoaded", () => {
                         return;
                     }
 
-                    saveProfileFromApiUser(user, remember);
+                    clearApiSession();
                 }
 
                 message.style.color = "#2e7d32";

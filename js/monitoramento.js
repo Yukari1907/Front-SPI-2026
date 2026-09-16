@@ -60,7 +60,11 @@ async function loadMonitoramento() {
             return;
         }
 
-        if (!camerasResult.ok || !Array.isArray(camerasResult.data) || camerasResult.data.length === 0) {
+        if (!camerasResult.ok || !Array.isArray(camerasResult.data)) {
+            cameraList.innerHTML = '<div class="empty">Não foi possível carregar as câmeras.</div>';
+            return;
+        }
+        if (camerasResult.data.length === 0) {
             cameraList.innerHTML = '<div style="padding:16px;color:var(--text-muted)">Nenhuma câmera cadastrada.</div>';
             document.getElementById("cameraSelect").innerHTML = "";
             return;
@@ -212,13 +216,13 @@ const MONITORING_LATENCY_SCALE_MS = 200;
 function renderDetectionState(data, message = "") {
     const connected = data?.connected === true;
     const validMetric = value => typeof value === "number" && Number.isFinite(value) && value >= 0;
-    const fps = connected && validMetric(data.fps) ? data.fps : 0;
+    const fps = data && validMetric(data.fps) ? data.fps : null;
     const latency = connected && validMetric(data.latencia_ms) ? data.latencia_ms : null;
     const setText = (id, text) => {
         const element = document.getElementById(id);
         if (element) element.textContent = text;
     };
-    setText("performanceFps", data ? fps.toFixed(1) : "—");
+    setText("performanceFps", fps === null ? "—" : fps.toFixed(1));
     setText("performanceLatency", latency === null ? "—" : `${latency.toFixed(1)} ms`);
     [["performanceFpsBar", fps / MONITORING_FPS_TARGET],
         ["performanceLatencyBar", (latency || 0) / MONITORING_LATENCY_SCALE_MS]].forEach(([id, ratio]) => {
@@ -380,7 +384,8 @@ function renderZonasOverlay() {
 // Inicialização
 // ─────────────────────────────────────────────
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    if (!await window.sessionReady) return;
     const datasetReviewLink = document.getElementById("datasetReviewLink");
 
     if (datasetReviewLink) {

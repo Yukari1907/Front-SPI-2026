@@ -19,11 +19,11 @@
  *   minimumQuantity → quantidade_min
  *   inUse         → em_uso
  *
- * O campo "location" (localização) não existe no backend — mantido apenas
- * localmente para exibição; não é persistido no banco.
+ * O campo "location" (localização) não existe no backend — indisponível.
  */
 
 let inventoryItems = [];
+let inventoryLoaded = false;
 let filteredItems = [];
 let inventoryPage = 1;
 let categoryChart;
@@ -78,6 +78,7 @@ function formatDate(date) {
 }
 
 function statusClass(status) {
+    if (status === "Dados indisponíveis") return "";
     return status === "Disponível"
         ? "success"
         : status === "Estoque Baixo"
@@ -86,7 +87,9 @@ function statusClass(status) {
 }
 
 function calculateStatus(quantity, minimum, expiration) {
-    if (expiration && new Date(expiration) < new Date()) return "Crítico";
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (expiration && new Date(expiration + "T00:00:00") < today) return "Crítico";
+    if (!Number.isFinite(quantity) || !Number.isFinite(minimum)) return "Dados indisponíveis";
     if (quantity <= 0) return "Crítico";
     if (quantity <= minimum) return "Estoque Baixo";
     return "Disponível";
@@ -97,25 +100,16 @@ function calculateStatus(quantity, minimum, expiration) {
 // ─────────────────────────────────────────────
 
 async function loadInventoryFromApi() {
-    try {
-        const result = await apiGet("/epis");
-
-        if (result.status === 0) {
-            showToast("Backend indisponível. Sem dados de EPIs.", "warning");
-            return;
-        }
-
-        if (result.ok && Array.isArray(result.data)) {
-            inventoryItems = result.data.map(fromApi);
-            filteredItems = [...inventoryItems];
-            renderInventory();
-        } else {
-            showToast("Não foi possível carregar os EPIs.", "danger");
-        }
-    } catch (e) {
-        console.error("[Inventario] Erro ao carregar EPIs:", e);
-        showToast("Erro ao carregar inventário.", "danger");
-    }
+    const result = await apiGet("/epis");
+    inventoryLoaded = result.ok && Array.isArray(result.data);
+    inventoryItems = inventoryLoaded ? result.data.map(fromApi) : [];
+    const category = $("inventoryCategory").value;
+    $("inventoryCategory").innerHTML = '<option value="">Todas</option>' + [...new Set(inventoryItems.map(item => item.category))]
+        .map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
+    $("inventoryCategory").value = category;
+    filterInventory();
+    if (!inventoryLoaded) showToast("Não foi possível carregar os EPIs.", "warning");
+    return inventoryLoaded;
 }
 
 // ─────────────────────────────────────────────
@@ -126,6 +120,10 @@ function renderExpiryTable() {
     const body = document.getElementById("expiryTableBody");
     if (!body) return;
 
+    if (!inventoryLoaded) {
+        body.innerHTML = '<tr><td colspan="2" class="empty">Dados indisponíveis.</td></tr>';
+        return;
+    }
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -154,7 +152,9 @@ function renderExpiryTable() {
 }
 
 function renderInventory() {
+    inventoryPage = Math.min(inventoryPage, Math.max(1, Math.ceil(filteredItems.length / 5)));
     const start = (inventoryPage - 1) * 5;
+    $("exportInventory").disabled = !inventoryLoaded;
 
     $("inventoryTable").innerHTML = filteredItems
         .slice(start, start + 5)
@@ -169,7 +169,7 @@ function renderInventory() {
 
                 <td>${escapeHtml(item.category)}</td>
                 <td>${escapeHtml(item.certificate)}</td>
-                <td>${item.quantity}</td>
+                <td>${item.quantity ?? "—"}</td>
                 <td>${formatDate(item.expiration)}</td>
                 <td>${escapeHtml(item.location || "—")}</td>
 
@@ -185,19 +185,20 @@ function renderInventory() {
                             <i class="fa-solid fa-eye"></i>
                         </button>
 
-                        <button class="icon-btn" onclick="editInventoryItem(${item.id})" title="Editar">
+                        <button class="icon-btn" data-inventory-write="inventory:edit" onclick="editInventoryItem(${item.id})" title="Editar">
                             <i class="fa-solid fa-pen"></i>
                         </button>
 
-                        <button class="icon-btn" onclick="deleteInventoryItem(${item.id})" title="Excluir">
+                        <button class="icon-btn" data-inventory-write="inventory:delete" onclick="deleteInventoryItem(${item.id})" title="Excluir">
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
                 </td>
             </tr>
         `)
-        .join("");
+        .join("") || `<tr><td colspan="8" class="empty">${inventoryLoaded ? "Nenhum EPI encontrado." : "Dados indisponíveis."}</td></tr>`;
 
+    document.querySelectorAll('[data-inventory-write]').forEach(button => { button.hidden = !canPerform(button.dataset.inventoryWrite); });
     const totalPages = Math.max(1, Math.ceil(filteredItems.length / 5));
 
     $("inventoryPagination").innerHTML = Array
@@ -211,13 +212,17 @@ function renderInventory() {
         `)
         .join("");
 
-    $("invTotal").textContent = inventoryItems.reduce((sum, item) => sum + item.quantity, 0);
-    $("invUse").textContent = inventoryItems.reduce((sum, item) => sum + item.inUse, 0);
-    $("invLow").textContent = inventoryItems.filter(item => item.quantity <= item.minimumQuantity).length;
-    $("invExpiry").textContent = inventoryItems.filter(item => {
-        const days = (new Date(item.expiration) - new Date()) / 86400000;
+    const sum = key => inventoryItems.every(item => Number.isFinite(item[key]))
+        ? inventoryItems.reduce((total, item) => total + item[key], 0) : "—";
+    $("invTotal").textContent = inventoryLoaded ? sum("quantity") : "—";
+    $("invUse").textContent = inventoryLoaded ? sum("inUse") : "—";
+    $("invLow").textContent = inventoryLoaded && inventoryItems.every(item => Number.isFinite(item.quantity) && Number.isFinite(item.minimumQuantity))
+        ? inventoryItems.filter(item => item.quantity <= item.minimumQuantity).length : "—";
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    $("invExpiry").textContent = inventoryLoaded ? inventoryItems.filter(item => {
+        const days = (new Date(item.expiration + "T00:00:00") - today) / 86400000;
         return days >= 0 && days <= 30;
-    }).length;
+    }).length : "—";
 
     updateInventoryCharts();
     renderExpiryTable();
@@ -232,6 +237,21 @@ function updateInventoryCharts() {
         statusTotals[item.status] = (statusTotals[item.status] || 0) + 1;
     });
 
+    if (!categoryChart || !statusChart) return;
+    if (inventoryItems.some(item => !Number.isFinite(item.quantity))) {
+        showChartState("inventoryCategoryChart", "Quantidades indisponíveis.");
+        showChartState("inventoryStatusChart", "Dados indisponíveis.");
+        return;
+    }
+    ["inventoryCategoryChart", "inventoryStatusChart"].forEach(id => {
+        const empty = !inventoryLoaded || !inventoryItems.length;
+        if (empty) showChartState(id, inventoryLoaded ? "Nenhum EPI cadastrado." : "Dados indisponíveis.");
+        else {
+            document.getElementById(id).hidden = false;
+            document.getElementById(id).style.display = "";
+            document.getElementById(`${id}State`)?.remove();
+        }
+    });
     categoryChart.data.labels = Object.keys(categoryTotals);
     categoryChart.data.datasets[0].data = Object.values(categoryTotals);
     categoryChart.update();
@@ -267,6 +287,7 @@ function filterInventory() {
 // ─────────────────────────────────────────────
 
 function openInventoryModal(item = null) {
+    if (!canPerform(item ? "inventory:edit" : "inventory:create")) return;
     $("inventoryForm").reset();
     $("inventoryForm").elements.id.value = item?.id || "";
     $("inventoryModalTitle").textContent = item ? "Editar EPI" : "Cadastrar EPI";
@@ -309,6 +330,7 @@ function viewInventoryItem(id) {
 }
 
 async function deleteInventoryItem(id) {
+    if (!canPerform("inventory:delete")) return;
     if (!confirm("Excluir EPI? Esta ação não pode ser desfeita.")) return;
 
     const result = await apiDelete(`/epis/${id}`);
@@ -324,7 +346,7 @@ async function deleteInventoryItem(id) {
         renderInventory();
         showToast("EPI excluído.", "danger");
     } else {
-        showToast(result.data?.error || "Falha ao excluir EPI.", "danger");
+        showToast(result.data?.error || result.data?.message || "Falha ao excluir EPI.", "danger");
     }
 }
 
@@ -338,6 +360,7 @@ function goInventoryPage(page) {
 // ─────────────────────────────────────────────
 
 function exportInventoryCsv() {
+    if (!inventoryLoaded) return;
     const header = ["Nome", "Categoria", "CA", "Quantidade", "Em uso", "Validade", "Status"];
 
     const rows = filteredItems.map(item => [
@@ -368,9 +391,11 @@ function exportInventoryCsv() {
 // Inicialização
 // ─────────────────────────────────────────────
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    if (!await window.sessionReady) return;
     const dark = document.documentElement.dataset.theme === "dark";
 
+    if (typeof Chart === "function") {
     Chart.defaults.color = dark ? "#e2e8f0" : "#374151";
     Chart.defaults.borderColor = dark ? "#334155" : "#e5e7eb";
 
@@ -400,6 +425,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
+    } else {
+        showChartState("inventoryCategoryChart", "Gráfico indisponível.");
+        showChartState("inventoryStatusChart", "Gráfico indisponível.");
+    }
+
     $("openInventoryModal").onclick = () => openInventoryModal();
     $("closeInventoryModal").onclick = $("cancelInventoryModal").onclick = closeInventoryModal;
 
@@ -407,8 +437,7 @@ document.addEventListener("DOMContentLoaded", () => {
     $("inventoryCategory").onchange = $("inventoryStatus").onchange = filterInventory;
 
     $("refreshInventory").onclick = async () => {
-        await loadInventoryFromApi();
-        showToast("Inventário atualizado.");
+        if (await loadInventoryFromApi()) showToast("Inventário atualizado.");
     };
 
     $("exportInventory").onclick = exportInventoryCsv;
@@ -419,6 +448,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const formData = Object.fromEntries(new FormData(event.currentTarget));
         const existingId = Number(formData.id);
+        if (!canPerform(existingId ? "inventory:edit" : "inventory:create")) return;
 
         const frontendItem = {
             name: formData.name,
@@ -448,8 +478,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         if (result.ok) {
             const savedEpi = fromApi(result.data);
-            // Preserva o campo location (não existe no backend)
-            savedEpi.location = frontendItem.location;
+
 
             if (existingId) {
                 const index = inventoryItems.findIndex(item => item.id === existingId);
@@ -463,7 +492,7 @@ document.addEventListener("DOMContentLoaded", () => {
             renderInventory();
             showToast(existingId ? "EPI atualizado." : "EPI cadastrado.");
         } else {
-            showToast(result.data?.error || "Falha ao salvar EPI.", "danger");
+            showToast(result.data?.error || result.data?.message || "Falha ao salvar EPI.", "danger");
         }
     };
 

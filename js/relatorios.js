@@ -1,45 +1,84 @@
 
 "use strict";
 
-const REPORT_COMPLIANCE_DATA = [
-    ["Janeiro", 88],
-    ["Fevereiro", 90],
-    ["Março", 91],
-    ["Abril", 93],
-    ["Maio", 94],
-    ["Junho", 96]
-];
+let reportSummary = null;
+let reportSectors = [];
 
-const REPORT_ALERTS_DATA = [
-    ["Produção", 12],
-    ["Prensa", 22],
-    ["Expedição", 8],
-    ["Estoque", 6]
-];
+async function loadReports() {
+    const results = await Promise.all([apiGet("/alertas"), apiGet("/cameras"), apiGet("/setores"), apiGet("/zonas")]);
+    const [alertsResult, camerasResult, sectorsResult, zonesResult] = results;
+    const valid = alertsResult.status === 404 || (alertsResult.ok && Array.isArray(alertsResult.data));
+    if (!valid) {
+        showChartState("reportAlerts", "Dados indisponíveis.");
+        return;
+    }
+    const alerts = alertsResult.status === 404 ? [] : alertsResult.data;
+    // Datas REST são horários locais do backend, sem fuso no contrato.
+    if (alerts.some(alert => !/^\d{4}-\d{2}-\d{2} /.test(alert.data || "") || Number.isNaN(new Date(alert.data.replace(" ", "T")).getTime()))) {
+        showChartState("reportAlerts", "Datas dos alertas indisponíveis.");
+        return;
+    }
+    const end = new Date(); end.setHours(23, 59, 59, 999);
+    const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - 29);
+    const filtered = alerts.filter(alert => {
+        const date = new Date(alert.data.replace(" ", "T"));
+        return date >= start && date <= end;
+    });
+    const resolved = filtered.filter(alert => alert.resolvido === true).length;
+    reportSummary = { total: filtered.length, resolved, rate: filtered.length ? `${(resolved / filtered.length * 100).toFixed(1)}%` : "—" };
+    document.getElementById("reportTotal").textContent = reportSummary.total;
+    document.getElementById("reportResolved").textContent = reportSummary.resolved;
+    document.getElementById("reportRate").textContent = `Taxa de resolução: ${reportSummary.rate}`;
+    const map = result => new Map((result.ok && Array.isArray(result.data) ? result.data : []).map(item => [item.id, item]));
+    const cameras = map(camerasResult), sectors = map(sectorsResult), zones = map(zonesResult);
+    const totals = new Map();
+    filtered.forEach(alert => {
+        const camera = cameras.get(alert.id_camera ?? zones.get(alert.id_zona)?.id_camera);
+        const sector = sectors.get(camera?.id_setor);
+        const key = sector?.id ?? null;
+        const row = totals.get(key) || [sector?.nome || "Setor indisponível", 0];
+        row[1] += 1; totals.set(key, row);
+    });
+    reportSectors = [...totals.values()];
+    document.getElementById("exportReport").disabled = false;
+    if (!reportSectors.length || typeof Chart !== "function") {
+        showChartState("reportAlerts", reportSectors.length ? "Gráfico indisponível." : "Nenhum alerta no período.");
+        return;
+    }
+    const dark = document.documentElement.dataset.theme === "dark";
+    Chart.defaults.color = dark ? "#e2e8f0" : "#374151";
+    Chart.defaults.borderColor = dark ? "#334155" : "#e5e7eb";
+    new Chart(document.getElementById("reportAlerts"), {
+        type: "bar",
+        data: { labels: reportSectors.map(item => item[0]), datasets: [{ label: "Alertas", data: reportSectors.map(item => item[1]), backgroundColor: "#3155f5" }] },
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
+    });
+}
 
 function csvEscape(value){
     return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
 function exportReportsCsv(){
+    if (!reportSummary) return;
     const rows = [
         ["VISÃO EPI PRO - RELATÓRIO GERENCIAL"],
         [],
         ["INDICADORES GERAIS"],
         ["Indicador", "Valor"],
-        ["Conformidade média", "94%"],
-        ["Alertas no período", 67],
-        ["Alertas resolvidos", 58],
-        ["Taxa de resolução", "86%"],
-        ["Disponibilidade das câmeras", "98%"],
+        ["Conformidade média", "Dados indisponíveis"],
+        ["Alertas nos últimos 30 dias (incluindo hoje)", reportSummary.total],
+        ["Alertas resolvidos", reportSummary.resolved],
+        ["Taxa de resolução", reportSummary.rate],
+        ["Disponibilidade histórica das câmeras", "Dados indisponíveis"],
         [],
         ["EVOLUÇÃO DA CONFORMIDADE"],
         ["Mês", "Conformidade (%)"],
-        ...REPORT_COMPLIANCE_DATA,
+        ["Dados indisponíveis"],
         [],
         ["ALERTAS POR SETOR"],
         ["Setor", "Quantidade"],
-        ...REPORT_ALERTS_DATA,
+        ...reportSectors,
         [],
         [
             "Gerado em",
@@ -77,62 +116,11 @@ function exportReportsCsv(){
     showToast("Relatório CSV gerado com sucesso.");
 }
 
-document.addEventListener("DOMContentLoaded",()=>{
-    const dark = document.documentElement.dataset.theme === "dark";
-
-    Chart.defaults.color = dark ? "#e2e8f0" : "#374151";
-    Chart.defaults.borderColor = dark ? "#334155" : "#e5e7eb";
-
-    new Chart(document.getElementById("reportCompliance"),{
-        type:"line",
-        data:{
-            labels:REPORT_COMPLIANCE_DATA.map(item => item[0].slice(0, 3)),
-            datasets:[{
-                label:"Conformidade %",
-                data:REPORT_COMPLIANCE_DATA.map(item => item[1]),
-                borderColor:"#3155f5",
-                backgroundColor:"rgba(49,85,245,.12)",
-                fill:true,
-                tension:.4
-            }]
-        },
-        options:{
-            responsive:true,
-            maintainAspectRatio:false
-        }
-    });
-
-    new Chart(document.getElementById("reportAlerts"),{
-        type:"bar",
-        data:{
-            labels:REPORT_ALERTS_DATA.map(item => item[0]),
-            datasets:[{
-                label:"Alertas",
-                data:REPORT_ALERTS_DATA.map(item => item[1]),
-                backgroundColor:[
-                    "#3155f5",
-                    "#dc2626",
-                    "#f59e0b",
-                    "#2e7d32"
-                ]
-            }]
-        },
-        options:{
-            responsive:true,
-            maintainAspectRatio:false,
-            plugins:{
-                legend:{
-                    display:false
-                }
-            }
-        }
-    });
-
-    document
-        .getElementById("printReport")
-        .addEventListener("click", ()=>window.print());
-
-    document
-        .getElementById("exportReport")
-        .addEventListener("click", exportReportsCsv);
+document.addEventListener("DOMContentLoaded", async () => {
+    if (!await window.sessionReady) return;
+    showChartState("reportCompliance", "Dados de conformidade indisponíveis.");
+    document.getElementById("printReport").addEventListener("click", () => window.print());
+    document.getElementById("exportReport").disabled = true;
+    document.getElementById("exportReport").addEventListener("click", exportReportsCsv);
+    await loadReports();
 });
