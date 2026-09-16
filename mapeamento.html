@@ -17,6 +17,7 @@
     <script src="js/theme.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/common.js" defer></script>
+    <script src="js/zone-area-editor.js" defer></script>
     <script src="js/mapeamento.js" defer></script>
 </head>
 
@@ -94,7 +95,7 @@
     </main>
 
 
-<div class="modal" id="zoneModal">
+<div class="modal" id="zoneModal" role="dialog" aria-modal="true" aria-labelledby="zoneModalTitle">
     <div class="modal-box" style="width:min(760px,96vw)">
         <button
             class="modal-close"
@@ -106,10 +107,9 @@
         </button>
 
         <div class="page-title" style="margin-bottom:20px">
-            <h2>Criar nova zona</h2>
+            <h2 id="zoneModalTitle">Criar nova zona</h2>
             <p class="text-muted">
-                Defina a câmera, o nome e a posição da zona no quadro de vídeo.
-                As coordenadas devem ficar entre 0 e 1.
+                Escolha uma câmera e desenhe a área da zona sobre a imagem.
             </p>
         </div>
 
@@ -134,62 +134,26 @@
                     >
                 </div>
 
-                <div class="form-group">
-                    <label for="zoneX">X</label>
-                    <input
-                        id="zoneX"
-                        name="x"
-                        type="number"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value="0.10"
-                        required
-                    >
-                </div>
-
-                <div class="form-group">
-                    <label for="zoneY">Y</label>
-                    <input
-                        id="zoneY"
-                        name="y"
-                        type="number"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value="0.10"
-                        required
-                    >
-                </div>
-
-                <div class="form-group">
-                    <label for="zoneWidth">Largura</label>
-                    <input
-                        id="zoneWidth"
-                        name="largura"
-                        type="number"
-                        min="0.01"
-                        max="1"
-                        step="0.01"
-                        value="0.30"
-                        required
-                    >
-                </div>
-
-                <div class="form-group">
-                    <label for="zoneHeight">Altura</label>
-                    <input
-                        id="zoneHeight"
-                        name="altura"
-                        type="number"
-                        min="0.01"
-                        max="1"
-                        step="0.01"
-                        value="0.30"
-                        required
-                    >
-                </div>
             </div>
+
+            <section class="zone-area-editor" aria-labelledby="zoneAreaTitle">
+                <h3 id="zoneAreaTitle">Área da zona</h3>
+                <p id="zoneAreaHint" class="text-muted">Arraste sobre a imagem para definir a área da zona.</p>
+                <div class="zone-frame-container">
+                    <div id="zoneFrameStage" hidden>
+                        <div id="zoneFrameMedia"></div>
+                        <svg id="zoneAreaOverlay" viewBox="0 0 1 1" preserveAspectRatio="none"
+                            aria-label="Desenhar área da zona" aria-describedby="zoneAreaHint">
+                            <rect id="zoneAreaRect" vector-effect="non-scaling-stroke" style="display:none" />
+                        </svg>
+                    </div>
+                </div>
+                <p id="zoneAreaStatus" class="text-muted" role="status" aria-live="polite">Selecione uma câmera para carregar a imagem.</p>
+                <div class="zone-area-actions">
+                    <button class="btn secondary" id="resetZoneArea" type="button" disabled>Redefinir área</button>
+                    <button class="btn secondary" id="retryZoneFrame" type="button" hidden>Tentar novamente</button>
+                </div>
+            </section>
 
             <label
                 style="

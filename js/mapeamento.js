@@ -129,9 +129,18 @@ function configureZoneCreation() {
     const openButton = document.getElementById("openZoneModal");
     const saveButton = document.getElementById("saveZoneButton");
     if (!modal || !form || !openButton || !saveButton) return;
+    const cameraSelect = document.getElementById("zoneCamera");
+    const areaEditor = new ZoneAreaEditor();
+    cameraSelect.addEventListener("change", () => {
+        const cameraId = Number(cameraSelect.value);
+        areaEditor.load(mappingCameras.some(camera => camera.id === cameraId) ? cameraId : null);
+    });
+    window.addEventListener("pagehide", () => areaEditor.clear());
 
     const close = () => {
         if (saveButton.disabled) return;
+        areaEditor.clear();
+        form.reset();
         modal.classList.remove("active");
         openButton.focus();
     };
@@ -146,6 +155,18 @@ function configureZoneCreation() {
     });
     document.addEventListener("keydown", event => {
         if (event.key === "Escape" && modal.classList.contains("active")) close();
+        if (event.key === "Tab" && modal.classList.contains("active")) {
+            const controls = [...modal.querySelectorAll("button, input, select")]
+                .filter(element => !element.disabled && element.getClientRects().length);
+            const first = controls[0], last = controls.at(-1);
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first.focus();
+            }
+        }
     });
 
     form.addEventListener("submit", async event => {
@@ -156,22 +177,22 @@ function configureZoneCreation() {
         const zone = {
             id_camera: Number(fields.get("id_camera")),
             nome: fields.get("nome").trim(),
-            x: Number(fields.get("x")),
-            y: Number(fields.get("y")),
-            largura: Number(fields.get("largura")),
-            altura: Number(fields.get("altura")),
             permitido: fields.has("permitido")
         };
         if (!zone.nome || !mappingCameras.some(camera => camera.id === zone.id_camera)) {
             showToast("Informe o nome da zona e selecione uma câmera cadastrada.", "warning");
             return;
         }
-        if (zone.x + zone.largura > 1 || zone.y + zone.altura > 1) {
-            showToast("A zona deve ficar inteiramente dentro do quadro da câmera.", "warning");
+        const selection = areaEditor.getSelection(zone.id_camera);
+        if (!selection) {
+            showToast(areaEditor.ready ? "Desenhe uma área válida sobre a imagem da câmera." : "Aguarde uma imagem disponível da câmera para definir a zona.", "warning");
             return;
         }
+        Object.assign(zone, selection);
 
         saveButton.disabled = true;
+        cameraSelect.disabled = true;
+        areaEditor.setBusy(true);
         try {
             const result = await apiPost("/zonas/registrar", zone);
             if (!result.ok) {
@@ -183,8 +204,12 @@ function configureZoneCreation() {
             close();
             showToast("Zona criada com sucesso.");
             await loadRiskZones();
+        } catch {
+            showToast("Não foi possível criar a zona. Tente novamente.", "danger");
         } finally {
             saveButton.disabled = false;
+            cameraSelect.disabled = false;
+            areaEditor.setBusy(false);
         }
     });
 }
