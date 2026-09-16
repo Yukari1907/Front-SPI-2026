@@ -10,9 +10,9 @@
  *   PUT  /alertas/<id>/resolvido → marcar como resolvido
  *   DELETE /alertas/<id>       → excluir alerta
  *
- * Nota: O backend retorna campos estruturais (id_camera, id_zona, id_epi, evento).
- * Severidade vem de severidade (inteiro). Campos de exibição como sector,
- * worker, description e action usam os dados disponíveis ou valores padrão.
+ * GET /zonas, /cameras e /setores fornecem os nomes e vínculos de localização.
+ * /alertas retorna id_zona e id_camera, sem nomes nem id_setor.
+ * Setor é obtido pela câmera; zona nunca é usada como nome de setor.
  */
 
 let alerts = [];
@@ -27,7 +27,11 @@ const $ = id => document.getElementById(id);
 // Mapeamento de campos backend → frontend
 // ─────────────────────────────────────────────
 
-function fromApiAlerta(apiAlerta) {
+function fromApiAlerta(apiAlerta, locations) {
+    const zone = locations.zones.get(apiAlerta.id_zona);
+    const camera = locations.cameras.get(apiAlerta.id_camera ?? zone?.id_camera);
+    const sector = locations.sectors.get(camera?.id_setor);
+    const name = item => typeof item?.nome === "string" ? item.nome.trim() : "";
     return {
         id: apiAlerta.id,
         // Campos diretos do backend
@@ -38,9 +42,10 @@ function fromApiAlerta(apiAlerta) {
         id_zona: apiAlerta.id_zona,
         id_epi: apiAlerta.id_epi,
         id_monitorar: apiAlerta.id_monitorar,
-        // Campos derivados/inferidos (backend não os retorna diretamente)
-        sector: apiAlerta.id_zona ? `Zona ${apiAlerta.id_zona}` : "Não especificado",
-        camera: apiAlerta.id_camera ? `Câmera ${apiAlerta.id_camera}` : "Não especificada",
+        // Nomes dos cadastros reais. Ausência não gera rótulos a partir de IDs.
+        sector: name(sector),
+        zone: name(zone),
+        camera: name(camera),
         worker: apiAlerta.id_usuario ? `Usuário ${apiAlerta.id_usuario}` : "Não identificado",
         // Severidade persistida, sem inferir pelo texto do evento.
         severidade: apiAlerta.severidade,
@@ -61,7 +66,20 @@ async function loadAlertsFromApi() {
     try {
         const result = await apiGet("/alertas");
         alertsLoaded = (result.ok && Array.isArray(result.data)) || result.status === 404;
-        alerts = result.ok && Array.isArray(result.data) ? result.data.map(fromApiAlerta) : [];
+        alerts = [];
+        if (result.ok && Array.isArray(result.data) && result.data.length) {
+            // Uma consulta por cadastro, sem requisições por alerta ou por página.
+            // Falhas de localização não impedem a listagem/resolução dos alertas.
+            const results = await Promise.allSettled([
+                apiGet("/zonas"), apiGet("/cameras"), apiGet("/setores")
+            ]);
+            const [zones, cameras, sectors] = results.map(result => {
+                const response = result.status === "fulfilled" ? result.value : null;
+                const items = response?.ok && Array.isArray(response.data) ? response.data : [];
+                return new Map(items.filter(item => item?.id != null).map(item => [item.id, item]));
+            });
+            alerts = result.data.map(alert => fromApiAlerta(alert, { zones, cameras, sectors }));
+        }
         if (!alertsLoaded) showToast("Não foi possível carregar os alertas.", "warning");
     } catch (e) {
         console.error("[Alertas] Erro ao carregar alertas:", e);
@@ -121,6 +139,7 @@ function getFilteredAlerts() {
         const searchableText = normalizeFilterText([
             alert.event,
             alert.sector,
+            alert.zone,
             alert.camera,
             alert.worker,
             alert.description
@@ -152,7 +171,7 @@ function renderAlerts() {
     if (!filteredAlerts.length) {
         $("alertsTable").innerHTML = `
             <tr>
-                <td colspan="6" class="empty">
+                <td colspan="7" class="empty">
                     ${alertsLoaded ? "Nenhum alerta encontrado com os filtros selecionados." : "Não foi possível carregar os alertas."}
                 </td>
             </tr>
@@ -165,7 +184,8 @@ function renderAlerts() {
         .map(alert => `
             <tr>
                 <td>${formatDateTime(alert.dateTime)}</td>
-                <td>${escapeHtml(alert.sector)}</td>
+                <td>${escapeHtml(alert.sector || "—")}</td>
+                <td>${escapeHtml(alert.zone || "—")}</td>
                 <td>${escapeHtml(alert.event)}</td>
 
                 <td>
@@ -208,8 +228,9 @@ function viewAlert(id) {
 
     $("alertDetailTitle").textContent = alert.event;
     $("alertDetailDate").textContent = formatDateTime(alert.dateTime);
-    $("alertDetailSector").textContent = alert.sector;
-    $("alertDetailCamera").textContent = alert.camera;
+    $("alertDetailSector").textContent = alert.sector || "—";
+    $("alertDetailZone").textContent = alert.zone || "—";
+    $("alertDetailCamera").textContent = alert.camera || "—";
     $("alertDetailWorker").textContent = alert.worker;
     $("alertDetailSeverity").textContent = alert.severity;
     $("alertDetailStatus").textContent = alert.status;
