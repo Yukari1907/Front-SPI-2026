@@ -48,8 +48,6 @@ As chamadas usam `credentials: 'include'` para enviar o cookie de sessão Flask.
 - Perfil: leitura de `/session`, sem edição local. Configurações: somente tema neste navegador.
 - Login: cookie como fonte de autenticação; dados locais antigos não autorizam acesso.
 
-Consulte [AUDITORIA_FINAL_INTEGRACAO.md](AUDITORIA_FINAL_INTEGRACAO.md) para contratos, problemas do backend e validações.
-
 ## Páginas
 
 Login, dashboard, monitoramento, alertas, inventário, controle de EPIs, mapeamento, relatórios, administração, configurações, perfil e sobre.
