@@ -60,26 +60,26 @@
         
 <div class="grid" style="grid-template-columns:320px 1fr">
     <aside class="card" style="text-align:center;align-self:start">
-        <div class="avatar" id="profileAvatar" style="width:110px;height:110px;margin:0 auto 18px;font-size:34px">AD</div>
-        <h2 id="profileNameDisplay">Administrador</h2>
-        <p class="text-muted" id="profileEmailDisplay">admin@visaoepi.com</p>
-        <span class="badge success" id="profileRoleDisplay" style="margin-top:12px">Administrador</span>
+        <div class="avatar" id="profileAvatar" style="width:110px;height:110px;margin:0 auto 18px;font-size:34px">—</div>
+        <h2 id="profileNameDisplay">—</h2>
+        <p class="text-muted" id="profileEmailDisplay">—</p>
+        <span class="badge success" id="profileRoleDisplay" style="margin-top:12px">—</span>
     </aside>
 
     <article class="card">
         <div class="section-title">
             <h2>Dados do Perfil</h2>
-            <button class="btn" id="saveProfile"><i class="fa-solid fa-floppy-disk"></i>Salvar</button>
+            <button class="btn" id="saveProfile" disabled title="Edição de perfil indisponível"><i class="fa-solid fa-floppy-disk"></i>Salvar</button>
         </div>
 
-        <form id="profileForm">
+        <p class="text-muted">Dados da sessão. Edição de perfil indisponível.</p><form id="profileForm">
             <div class="modal-grid">
                 <div class="form-group"><label>Nome</label><input name="name"></div>
                 <div class="form-group"><label>E-mail</label><input name="email" type="email"></div>
                 <div class="form-group"><label>Telefone</label><input name="phone"></div>
                 <div class="form-group"><label>Matrícula</label><input name="registration"></div>
-                <div class="form-group"><label>Perfil</label><select name="role"><option>Administrador</option><option>Supervisor</option><option>Operador</option><option>Técnico de Segurança</option></select></div>
-                <div class="form-group"><label>Unidade</label><select name="unit"><option>Matriz</option><option>Unidade Industrial 1</option><option>Unidade Industrial 2</option></select></div>
+                <div class="form-group"><label>Perfil</label><input name="role" disabled></div>
+                <div class="form-group"><label>Unidade</label><input name="unit" disabled></div>
             </div>
         </form>
     </article>

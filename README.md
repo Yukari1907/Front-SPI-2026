@@ -16,7 +16,7 @@ Acesse `http://localhost:8080/login.html`.
 
 ## Configuração da API
 
-`js/api.js` usa por padrão `http://localhost:5000` e fornece `apiGet`, `apiPost`, `apiPut`, `apiDelete` e `apiVideoUrl`.
+Defina `window.SPI_API_BASE_URL` antes de carregar `js/api.js` para outro ambiente. O padrão é `http://localhost:5000` e fornece `apiGet`, `apiPost`, `apiPut`, `apiDelete` e `apiVideoUrl`.
 
 As chamadas usam `credentials: 'include'` para enviar o cookie de sessão Flask. Respostas `401` limpam a sessão local e redirecionam para o login quando apropriado.
 
@@ -29,21 +29,19 @@ As chamadas usam `credentials: 'include'` para enviar o cookie de sessão Flask.
 - Alertas: listar e marcar como resolvido.
 - Monitoramento: câmeras, setores, stream MJPEG e polling de detecções.
 - Mapeamento: setores e câmeras.
-- Dashboard: alertas recentes.
+- Dashboard: alertas recentes, alertas de hoje, estatísticas por categoria/dia e câmeras online.
 - Administração: cadastro de usuário com `POST /signup`.
 
-### Parcialmente integrado
+### Limitações tratadas sem dados de exemplo
 
-- Administração: cadastro é real; listar, editar, bloquear e excluir continuam locais porque faltam endpoints.
-- Mapeamento: posições são distribuídas no frontend porque a API não retorna coordenadas X/Y.
-- Dashboard: utiliza os campos disponíveis nos alertas.
+- Administração: somente cadastro por `POST /signup`; listagem, edição, bloqueio e exclusão indisponíveis.
+- Relatórios: alertas dos últimos 30 dias, resolução e distribuição por setor calculados a partir das APIs reais; conformidade e disponibilidade histórica indisponíveis.
+- Controle de EPIs: estatísticas reais de alertas por categoria; colaboradores e conformidade indisponíveis.
+- Mapeamento: planta ilustrativa, câmeras/setores/zonas reais, criação visual de zonas e contador online.
+- Perfil: leitura de `/session`, sem edição local. Configurações: somente tema neste navegador.
+- Login: cookie como fonte de autenticação; dados locais antigos não autorizam acesso.
 
-### Ainda mockado/local
-
-- Controle de EPIs por colaborador.
-- Relatórios e séries históricas.
-- Edição, bloqueio e exclusão de usuários.
-- Preferências de interface e dados auxiliares em `localStorage`.
+Consulte [AUDITORIA_FINAL_INTEGRACAO.md](AUDITORIA_FINAL_INTEGRACAO.md) para contratos, problemas do backend e validações.
 
 ## Páginas
 
@@ -54,3 +52,15 @@ Login, dashboard, monitoramento, alertas, inventário, controle de EPIs, mapeame
 - Se a API estiver indisponível, as áreas integradas exibem erro de conexão.
 - Ajuste a URL do backend em `js/api.js` para outro ambiente.
 - Não armazene senhas, tokens ou credenciais reais no frontend.
+
+## Testes
+
+Com Playwright e navegador já disponíveis (nenhuma instalação realizada nesta auditoria):
+
+```sh
+node tests/frontend-integration.cjs
+node tests/zone-media.cjs
+node tests/final-audit.cjs
+```
+
+Os testes usam API simulada e não alteram o backend. `SPI_CHROMIUM_EXECUTABLE` permite indicar um navegador instalado; `NODE_PATH` pode apontar para um Playwright já existente fora do repositório. A suíte de mídia serve MJPEG multipart por HTTP local.

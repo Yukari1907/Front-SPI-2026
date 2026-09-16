@@ -218,7 +218,7 @@ function renderSectorList(setoresResult, camerasResult) {
     const sectorList = document.getElementById("sectorList");
     if (!sectorList) return;
 
-    if (setoresResult.status === 0) {
+    if (!setoresResult.ok || !Array.isArray(setoresResult.data)) {
         sectorList.innerHTML = '<div style="padding:12px;color:var(--danger)">Backend indisponível.</div>';
         return;
     }
@@ -238,7 +238,8 @@ function renderSectorList(setoresResult, camerasResult) {
     });
 
     sectorList.innerHTML = setores.map(setor => {
-        const camerasCount = camerasPerSetor[setor.id] || 0;
+        const camerasCount = camerasResult.ok && Array.isArray(camerasResult.data)
+            ? camerasPerSetor[setor.id] || 0 : "—";
         return `
             <div style="display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border)">
                 <span>${escapeHtml(setor.nome)}</span>
@@ -256,6 +257,10 @@ function renderFactoryMap(camerasResult) {
 
     const cameras = Array.isArray(camerasResult.data) ? camerasResult.data : [];
 
+    if (!camerasResult.ok || !Array.isArray(camerasResult.data)) {
+        factoryMap.innerHTML = '<p class="empty">Não foi possível carregar as câmeras.</p>';
+        return;
+    }
     if (cameras.length === 0) {
         factoryMap.innerHTML = '<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:var(--text-muted);text-align:center"><i class="fa-solid fa-map" style="font-size:48px;display:block;margin-bottom:8px"></i>Nenhuma câmera cadastrada</div>';
         return;
@@ -268,7 +273,7 @@ function renderFactoryMap(camerasResult) {
         const color = CAMERA_COLORS[index % CAMERA_COLORS.length];
         return `
             <button
-                title="Câmera ${camera.id} — IP: ${escapeHtml(camera.ip)}"
+                title="${escapeHtml(camera.nome || `Câmera ${camera.id}`)}"
                 style="
                     position:absolute;
                     left:${pos.x}%;
@@ -345,7 +350,8 @@ function renderMapAlertIndicator(alerta) {
     }, 6000);
 }
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    if (!await window.sessionReady) return;
     configureZoneCreation();
     loadMapeamento();
     loadMapCamerasOnline();

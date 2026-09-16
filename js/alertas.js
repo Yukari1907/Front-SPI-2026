@@ -36,7 +36,7 @@ function fromApiAlerta(apiAlerta, locations) {
         id: apiAlerta.id,
         // Campos diretos do backend
         event: apiAlerta.evento || "Evento não especificado",
-        dateTime: apiAlerta.data || new Date().toISOString(),
+        dateTime: apiAlerta.data || null,
         resolvido: apiAlerta.resolvido,
         id_camera: apiAlerta.id_camera,
         id_zona: apiAlerta.id_zona,
@@ -46,7 +46,7 @@ function fromApiAlerta(apiAlerta, locations) {
         sector: name(sector),
         zone: name(zone),
         camera: name(camera),
-        worker: apiAlerta.id_usuario ? `Usuário ${apiAlerta.id_usuario}` : "Não identificado",
+        worker: apiAlerta.id_usuario ? `Usuário ${apiAlerta.id_usuario}` : "—",
         // Severidade persistida, sem inferir pelo texto do evento.
         severidade: apiAlerta.severidade,
         severity: notificationSeverityMeta(apiAlerta.severidade).label,
@@ -108,8 +108,9 @@ function renderAlertCounts() {
 // ─────────────────────────────────────────────
 
 function formatDateTime(value) {
+    if (!value) return "—";
     const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
+    if (Number.isNaN(date.getTime())) return "—";
     return new Intl.DateTimeFormat("pt-BR", {
         dateStyle: "short",
         timeStyle: "short"
@@ -296,7 +297,8 @@ async function resolveCurrentAlert() {
 // Inicialização
 // ─────────────────────────────────────────────
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+    if (!await window.sessionReady) return;
     // Carrega dados reais do backend
     loadAlertsFromApi();
 

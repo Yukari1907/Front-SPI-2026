@@ -26,7 +26,7 @@
         <div class="topbar">
             <div class="page-title">
                 <h1>Dashboard</h1>
-                <p class="text-muted">Visão geral da operação, conformidade e desempenho do turno.</p>
+                <p class="text-muted">Visão geral da operação, conformidade e dados disponíveis.</p>
             </div>
 
             
@@ -59,7 +59,7 @@
 
         
 <div class="section-title">
-    <span class="dashboard-live">Sistema online</span>
+    <span class="text-muted">Dados da operação</span>
 </div>
 
 <div class="grid kpi-grid">
@@ -81,25 +81,25 @@
         <i class="fa-solid fa-triangle-exclamation"></i>
         <h3>Alertas Hoje</h3>
         <strong id="dashboardAlertsToday">—</strong>
-        <p class="text-muted">Dados indisponíveis</p>
+        <p class="text-muted">Registros de hoje</p>
     </article>
 
     <article class="card kpi">
         <i class="fa-solid fa-video"></i>
         <h3>Câmeras Online</h3>
         <strong id="dashboardCamerasOnline">—</strong>
-        <p class="text-muted">Monitoramento ativo</p>
+        <p class="text-muted">Status atual das câmeras</p>
     </article>
 </div>
 
 <div class="grid charts-grid">
     <article class="card">
-        <div class="section-title"><h2>Conformidade por EPI</h2></div>
+        <div class="section-title"><h2>Alertas por categoria de EPI</h2></div>
         <div class="chart-box"><canvas id="dashboardPpeChart"></canvas></div>
     </article>
 
     <article class="card">
-        <div class="section-title"><h2>Alertas por Turno</h2></div>
+        <div class="section-title"><h2>Alertas por dia (últimos 30 dias)</h2></div>
         <div class="chart-box"><canvas id="dashboardAlertsChart"></canvas></div>
     </article>
 </div>
@@ -107,7 +107,7 @@
 <article class="card table-card">
     <div class="table-head">
         <div>
-            <h2>Últimas Detecções</h2>
+            <h2>Alertas recentes</h2>
             <p class="text-muted">Eventos processados pelo sistema.</p>
         </div>
     </div>

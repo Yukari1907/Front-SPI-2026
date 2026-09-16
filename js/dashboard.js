@@ -13,7 +13,7 @@
 function formatTime(dateStr) {
     if (!dateStr) return "—";
     const date = new Date(dateStr);
-    if (Number.isNaN(date.getTime())) return dateStr;
+    if (Number.isNaN(date.getTime())) return "—";
     return new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" }).format(date);
 }
 
@@ -27,6 +27,7 @@ async function loadDashboardKpis() {
 async function loadDashboardEvents() {
     const tbody = document.getElementById("dashboardEvents");
     if (!tbody) return;
+    document.getElementById("dashboardAlertsToday").textContent = "—";
 
     try {
         const result = await apiGet("/alertas");
@@ -43,7 +44,16 @@ async function loadDashboardEvents() {
             return;
         }
 
+        const valid = result.status === 404 || (result.ok && Array.isArray(result.data));
+        if (!valid) {
+            tbody.innerHTML = '<tr><td colspan="4" class="empty">Dados indisponíveis</td></tr>';
+            return;
+        }
         const alertas = Array.isArray(result.data) ? result.data : [];
+        const today = new Date();
+        const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        document.getElementById("dashboardAlertsToday").textContent = alertas.some(alert => !alert.data)
+            ? "—" : String(alertas.filter(alert => alert.data.slice(0, 10) === todayKey).length);
 
         if (alertas.length === 0) {
             tbody.innerHTML = `
@@ -87,17 +97,7 @@ async function loadDashboardEvents() {
     }
 }
 
-// Categorias de EPI exibidas no gráfico de rosca. Ver CONTRATO_INTEGRACAO.md:
-// GET /alertas/estatisticas/epi só devolve categorias que já tiveram alerta
-// (sem total:0 para as ausentes) — o frontend precisa completar com zero.
-const DASHBOARD_PPE_CATEGORIES = ["Capacete", "Colete", "Luvas", "Óculos", "Botina"];
 const DASHBOARD_PPE_COLORS = ["#3155f5", "#2e7d32", "#f59e0b", "#0ea5e9", "#7c3aed"];
-
-const DASHBOARD_PPE_FALLBACK = [98, 96, 94, 89, 97];
-const DASHBOARD_ALERTS_FALLBACK = {
-    labels: ["Seg 08h", "Seg 14h", "Ter 08h", "Ter 14h", "Qua 08h", "Qua 14h", "Qui 08h", "Qui 14h", "Sex 08h", "Sex 14h"],
-    data: [3, 5, 4, 7, 2, 6, 5, 8, 6, 9]
-};
 
 function formatDia(diaStr) {
     const date = new Date(`${diaStr}T00:00:00`);
@@ -108,28 +108,14 @@ function formatDia(diaStr) {
 async function loadPpeChartData() {
     const result = await apiGet("/alertas/estatisticas/epi");
 
-    if (result.status === 0 || !result.ok || !Array.isArray(result.data)) {
-        showToast("Estatísticas de EPI indisponíveis — exibindo dados de exemplo.", "warning");
-        return DASHBOARD_PPE_FALLBACK;
-    }
-
-    // Completa com zero as categorias que não aparecem na resposta
-    // (nunca geraram alerta), conforme o contrato.
-    const totaisPorCategoria = {};
-    result.data.forEach(item => {
-        totaisPorCategoria[item.categoria] = item.total;
-    });
-
-    return DASHBOARD_PPE_CATEGORIES.map(categoria => totaisPorCategoria[categoria] || 0);
+    if (!result.ok || !Array.isArray(result.data)) return null;
+    return { labels: result.data.map(item => item.categoria), data: result.data.map(item => item.total) };
 }
 
 async function loadAlertsChartData() {
     const result = await apiGet("/alertas/estatisticas/periodo");
 
-    if (result.status === 0 || !result.ok || !Array.isArray(result.data)) {
-        showToast("Estatísticas de alertas por período indisponíveis — exibindo dados de exemplo.", "warning");
-        return DASHBOARD_ALERTS_FALLBACK;
-    }
+    if (!result.ok || !Array.isArray(result.data)) return null;
 
     return {
         labels: result.data.map(item => formatDia(item.dia)),
@@ -138,22 +124,29 @@ async function loadAlertsChartData() {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
+    if (!await window.sessionReady) return;
     // Carrega eventos reais
     loadDashboardEvents();
     loadDashboardKpis();
 
     const dark = document.documentElement.dataset.theme === "dark";
+    if (typeof Chart !== "function") {
+        showChartState("dashboardPpeChart", "Gráfico indisponível.");
+        showChartState("dashboardAlertsChart", "Gráfico indisponível.");
+        return;
+    }
     Chart.defaults.color = dark ? "#e2e8f0" : "#374151";
     Chart.defaults.borderColor = dark ? "#334155" : "#e5e7eb";
 
     const ppeData = await loadPpeChartData();
 
-    new Chart(document.getElementById("dashboardPpeChart"), {
+    if (!ppeData || !ppeData.data.length) showChartState("dashboardPpeChart", ppeData ? "Nenhum alerta de EPI registrado." : "Dados indisponíveis");
+    else new Chart(document.getElementById("dashboardPpeChart"), {
         type: "doughnut",
         data: {
-            labels: DASHBOARD_PPE_CATEGORIES,
+            labels: ppeData.labels,
             datasets: [{
-                data: ppeData,
+                data: ppeData.data,
                 backgroundColor: DASHBOARD_PPE_COLORS
             }]
         },
@@ -167,7 +160,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const alertsData = await loadAlertsChartData();
 
-    new Chart(document.getElementById("dashboardAlertsChart"), {
+    if (!alertsData || !alertsData.data.length) showChartState("dashboardAlertsChart", alertsData ? "Nenhum alerta no período." : "Dados indisponíveis");
+    else new Chart(document.getElementById("dashboardAlertsChart"), {
         type: "line",
         data: {
             labels: alertsData.labels,

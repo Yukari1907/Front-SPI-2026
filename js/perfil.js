@@ -1,5 +1,6 @@
 
-document.addEventListener("DOMContentLoaded",()=>{
+document.addEventListener("DOMContentLoaded", async () => {
+    if (!await window.sessionReady) return;
     const profile=getProfile();
     const form=document.getElementById("profileForm");
 
@@ -12,15 +13,7 @@ document.addEventListener("DOMContentLoaded",()=>{
     document.getElementById("profileEmailDisplay").textContent=profile.email;
     document.getElementById("profileRoleDisplay").textContent=profile.role;
 
-    document.getElementById("saveProfile").addEventListener("click",()=>{
-        const updated={
-            ...profile,
-            ...Object.fromEntries(new FormData(form))
-        };
-
-        localStorage.setItem("visaoepi_profile",JSON.stringify(updated));
-        showToast("Perfil atualizado.");
-
-        setTimeout(()=>window.location.reload(),300);
-    });
+    Array.from(form.elements).forEach(field => { field.disabled = true; });
+    document.getElementById("saveProfile").disabled = true;
+    document.getElementById("saveProfile").title = "Edição de perfil indisponível";
 });

@@ -58,12 +58,12 @@
                 <form id="loginForm">
                     <div class="form-group">
                         <label>E-mail</label>
-                        <input name="email" type="email" value="admin@visaoepi.com" required>
+                        <input name="email" type="email" autocomplete="username" required>
                     </div>
 
                     <div class="form-group password-field">
                         <label>Senha</label>
-                        <input name="password" id="loginPassword" type="password" value="123456" required>
+                        <input name="password" id="loginPassword" type="password" autocomplete="current-password" required>
 
                         <button type="button" class="password-toggle" id="passwordToggle">
                             <i class="fa-solid fa-eye"></i>
@@ -72,26 +72,20 @@
 
                     <div class="auth-options">
                         <label>
-                            <input type="checkbox" id="rememberLogin">
-                            Lembrar acesso
+                            <input type="checkbox" id="rememberLogin" disabled title="Duração da sessão definida pelo sistema">
+                            Sessão gerenciada pelo sistema
                         </label>
 
                         <a href="#" id="forgotPassword">Esqueci minha senha</a>
                     </div>
 
-                    <button class="btn auth-submit">
+                    <button type="submit" class="btn auth-submit">
                         <i class="fa-solid fa-right-to-bracket"></i>
                         Entrar
                     </button>
 
                     <div class="auth-message" id="loginMessage"></div>
                 </form>
-
-                <div class="demo-box">
-                    <strong>Acesso de demonstração</strong><br>
-                    E-mail: admin@visaoepi.com<br>
-                    Senha: 123456
-                </div>
             </div>
         </section>
     </main>

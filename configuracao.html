@@ -26,7 +26,7 @@
         <div class="topbar">
             <div class="page-title">
                 <h1>Configurações</h1>
-                <p class="text-muted">Configure IA, notificações, integrações e aparência.</p>
+                <p class="text-muted">Personalize a aparência neste navegador.</p>
             </div>
 
             
@@ -59,7 +59,7 @@
 
         
 <div class="top-actions" style="justify-content:flex-end;margin-bottom:20px">
-    <button class="btn" id="saveSettings"><i class="fa-solid fa-floppy-disk"></i>Salvar alterações</button>
+    <button class="btn" id="saveSettings"><i class="fa-solid fa-floppy-disk"></i>Salvar tema</button>
 </div>
 
 <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
@@ -69,34 +69,31 @@
         <div class="grid">
             <div class="form-group">
                 <label>Modelo</label>
-                <select id="model">
-                    <option>YOLOv8</option>
-                    <option>YOLOv11</option>
-                </select>
+                <select id="model" disabled><option>Dados indisponíveis</option></select>
             </div>
 
             <div class="form-group">
                 <label>Confiança mínima</label>
-                <input id="confidence" type="range" min="40" max="95" value="75">
-                <span id="confidenceValue">75%</span>
+                <input id="confidence" type="text" value="Dados indisponíveis" disabled>
+                <span id="confidenceValue">Configuração indisponível.</span>
             </div>
 
-            <label><input type="checkbox" checked> Detectar óculos</label>
-            <label><input type="checkbox" checked> Detectar área restrita</label>
+            <label><input type="checkbox" disabled> Detectar óculos</label>
+            <label><input type="checkbox" disabled> Detectar área restrita</label>
         </div>
     </article>
 
     <article class="card">
-        <div class="section-title"><h2>Notificações</h2></div>
+        <div class="section-title"><h2>Notificações</h2></div><p class="text-muted">Configurações indisponíveis.</p>
 
         <div class="grid">
-            <label><input type="checkbox" id="notifyEmailCheckbox" checked> Notificação por e-mail</label>
-            <label><input type="checkbox" checked> Aviso sonoro</label>
-            <label><input type="checkbox"> Alertar supervisor</label>
+            <label><input type="checkbox" id="notifyEmailCheckbox" disabled> Notificação por e-mail</label>
+            <label><input type="checkbox" disabled> Aviso sonoro</label>
+            <label><input type="checkbox" disabled> Alertar supervisor</label>
 
             <div class="form-group">
                 <label>E-mail do supervisor</label>
-                <input type="email" id="supervisorEmailInput" placeholder="supervisor@empresa.com">
+                <input type="email" id="supervisorEmailInput" disabled placeholder="supervisor@empresa.com">
             </div>
         </div>
     </article>
@@ -117,13 +114,13 @@
         <div class="section-title"><h2>Integrações</h2></div>
 
         <div class="form-group">
-            <label>URL da API</label>
-            <input value="http://localhost:8080/api">
+            <label>Configuração da integração</label>
+            <input value="Indisponível nesta tela" disabled>
         </div>
 
         <div class="form-group" style="margin-top:14px">
             <label>WebSocket</label>
-            <input value="ws://localhost:8080/ws">
+            <input value="Indisponível nesta tela" disabled>
         </div>
     </article>
 </div>
