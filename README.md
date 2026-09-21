@@ -96,7 +96,7 @@ Os testes usam API simulada e não alteram o backend. `SPI_CHROMIUM_EXECUTABLE` 
 - 📋 **Board no Trello (Scrum):** [Acessar Board Trello](https://trello.com/invite/b/6a7c642a1869ee56e6b87721/ATTIa96dcd45666a92d8945f433a8e43dbddDCF772C5/liora-2026)
 - 📝 **Artefatos e Cerimônias Scrum:** [Acessar CERIMONIAS.md](./CERIMONIAS.md)
 - 💻 **Repositório Back-end:** [Acessar Repositório do Back-end](https://github.com/iurycar/backend-SPI)
-- 🌐 **Figma:** [Acessar Aplicação](https://www.figma.com/proto/rEWad6N01LtIoKwnaVJDsY/Metaindustria?node-id=303-1402&p=f&t=ntg4KVlwk91JGybR-1&scaling=scale-down&content-scaling=fixed&page-id=1%3A9)
+- 🌐 **Protótipo no Figma:** [Acessar protótipo](https://www.figma.com/proto/rEWad6N01LtIoKwnaVJDsY/Metaindustria?node-id=303-1402&p=f&t=ntg4KVlwk91JGybR-1&scaling=scale-down&content-scaling=fixed&page-id=1%3A9)
 
 ---
 
