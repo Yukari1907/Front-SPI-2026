@@ -96,7 +96,7 @@ Os testes usam API simulada e não alteram o backend. `SPI_CHROMIUM_EXECUTABLE` 
 - 📋 **Board no Trello (Scrum):** [Acessar Board Trello](https://trello.com/invite/b/6a7c642a1869ee56e6b87721/ATTIa96dcd45666a92d8945f433a8e43dbddDCF772C5/liora-2026)
 - 📝 **Artefatos e Cerimônias Scrum:** [Acessar CERIMONIAS.md](./CERIMONIAS.md)
 - 💻 **Repositório Back-end:** [Acessar Repositório do Back-end](https://github.com/iurycar/backend-SPI)
-- 🌐 **Aplicação Funcional / Protótipo:** [Acessar Aplicação](COLE_AQUI_O_LINK_DO_SITE_OU_VERCEL)
+- 🌐 **Figma:** [Acessar Aplicação](https://www.figma.com/proto/rEWad6N01LtIoKwnaVJDsY/Metaindustria?node-id=303-1402&p=f&t=ntg4KVlwk91JGybR-1&scaling=scale-down&content-scaling=fixed&page-id=1%3A9)
 
 ---
 
@@ -110,6 +110,20 @@ Conforme a evolução do projeto e direcionamentos pedagógicos em sala, a Sprin
 4. **Comunicação em Tempo Real via WebSocket:** Implementação e refinamento dos barramentos de alertas sonoros e visuais instantâneos, com redução no delay de integração entre Back-end e Front-end.
 5. **Gestão Ágil no Trello:** Reestruturação do board do grupo seguindo as etapas oficiais do Scrum (*Product Backlog*, *Sprint Backlog*, *Em andamento*, *Em revisão* e *Concluído*) com responsável atribuído em cada card.
 
+
+## 🎨 Protótipo de Alta Fidelidade & Mapa de Telas (Figma)
+
+O protótipo no Figma foi evoluído para cobrir a totalidade dos fluxos do sistema Liora/VisãoEPI Pro, estabelecendo a arquitetura de informação e guia de estilo para o ambiente industrial:
+
+### 1. Fluxo e Arquitetura de Telas
+- **Autenticação e Acesso:** Login, Recuperação de Senha e Cadastro de Usuários.
+- **Monitoramento Operacional:** Dashboard Geral, Central de Câmeras IP (Live Stream), Mapeamento de Setores e Zonas de Risco com vinculação de EPIs obrigatórios[cite: 3, 4].
+- **Gestão de Segurança:** Central de Alertas em Tempo Real, Inventário/Controle de EPIs e Relatórios de Conformidade[cite: 3, 4].
+- **Configurações e Perfil:** Gerenciamento de Câmeras, Perfil do Usuário e Configurações da Aplicação[cite: 3, 4].
+
+### 2. Guia de Estilo & Decisões de UX
+- **Design System:** Definição de componentes reutilizáveis para cards de câmeras, tabelas de alertas, seletores de zonas e modais.
+- **Paleta de Cores e Acessibilidade:** A paleta inicial do Figma (tons de azul com destaques em vermelho para não conformidade) foi adaptada na aplicação web funcional para maximizar o contraste e suportar o modo escuro, garantindo visibilidade imediata dos alertas no chão de fábrica.
 ---
 
 ## 🏗️ Arquitetura Técnica e Tecnologias
