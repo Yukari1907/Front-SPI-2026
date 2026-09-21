@@ -1,7 +1,7 @@
 # Registro de Cerimônias e Artefatos Scrum - Sprint 3
 
 **Projeto:** Metaindústria - Aplicação para Gerenciamento de EPIs e Segurança Industrial  
-**Curso:** Engenharia de Software / Engenharia da Computação - FIAP 2026  
+**Curso:** Engenharia da Computação - FIAP 2026  
 **Integrantes:**
 - Bruno Takaya - RM: 554986 (3ECA)
 - Iury Cardoso Araujo - RM: 558850 (3ECA)
