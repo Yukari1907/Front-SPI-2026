@@ -94,11 +94,6 @@ Os testes usam API simulada e não alteram o backend. `SPI_CHROMIUM_EXECUTABLE` 
 
 A suíte de recuperação usa relógio controlado e MJPEG HTTP local para cobrir falhas,
 retomada, corridas de câmera, visibilidade, limpeza e os três tamanhos nos dois temas.
-O registro desta entrega está em [ETAPA5_MONITORAMENTO.md](ETAPA5_MONITORAMENTO.md).
-
-Os contratos atuais, as pendências e os requisitos para liberar os controles estão em [CONTRATOS_BACKEND.md](CONTRATOS_BACKEND.md).
-
-A matriz CRUD, os limites da auditoria e a validação da etapa 3 estão em [AUDITORIA_CRUD_ETAPA3.md](AUDITORIA_CRUD_ETAPA3.md).
 
 
 ## 👥 Integrantes do Grupo
