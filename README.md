@@ -2,6 +2,18 @@
 
 Interface web do SPI construída com HTML, CSS e JavaScript. A integração com o backend Flask é centralizada em `js/api.js`.
 
+**Grupo:** Liora 
+**Challenge 2026 - FIAP & Metaindustria**  
+**Disciplina:** Engenharia de Software / Engenharia da Computação — 3º Ano / 2º Semestre  
+
+## 📌 Sobre o Projeto
+
+### O Problema
+No ambiente fabril e de manufatura avançada, o modelo tradicional de gestão de segurança do trabalho é predominantemente reativo. Inspeções periódicas e checagens manuais criam uma falsa sensação de controle, permitindo que pequenos desvios ocorram sem detecção imediata, elevando o risco de acidentes.
+
+### A Solução
+O **VisãoEPI Pro** é uma aplicação web voltada ao monitoramento proativo de segurança e gestão de EPIs, desenvolvida para o Open Lab **Metaindústria** (ABDI & SPI Integração). A solução utiliza visão computacional e comunicação em tempo real para detectar não conformidades em feeds de câmeras e emitir alertas instantâneos, transformando a gestão de segurança.
+
 ## Como executar
 
 1. Configure e inicie o PostgreSQL.
@@ -69,3 +81,56 @@ node tests/final-audit.cjs
 ```
 
 Os testes usam API simulada e não alteram o backend. `SPI_CHROMIUM_EXECUTABLE` permite indicar um navegador instalado; `NODE_PATH` pode apontar para um Playwright já existente fora do repositório. A suíte de mídia serve MJPEG multipart por HTTP local.
+
+
+## 👥 Integrantes do Grupo
+- **Bruno Takaya** - RM: 554986 (3ECA)
+- **Iury Cardoso Araujo** - RM: 558850 (3ECA)
+- **Kethely Ester da Silva** - RM: 559187 (3ECA)
+- **Raissa Yukari Senoi** - RM:558120 (3ECR) 
+- **Vanessa Iris Nobre Ribas** - RM: 559211 (3ECA)
+
+---
+
+## 🔗 Links Oficiais do Projeto (Sprint 3)
+- 📋 **Board no Trello (Scrum):** [Acessar Board Trello](https://trello.com/invite/b/6a7c642a1869ee56e6b87721/ATTIa96dcd45666a92d8945f433a8e43dbddDCF772C5/liora-2026)
+- 📝 **Artefatos e Cerimônias Scrum:** [Acessar CERIMONIAS.md](./CERIMONIAS.md)
+- 💻 **Repositório Back-end:** [Acessar Repositório do Back-end](https://github.com/iurycar/backend-SPI)
+- 🌐 **Protótipo no Figma:** [Acessar protótipo](https://www.figma.com/proto/rEWad6N01LtIoKwnaVJDsY/Metaindustria?node-id=303-1402&p=f&t=ntg4KVlwk91JGybR-1&scaling=scale-down&content-scaling=fixed&page-id=1%3A9)
+
+---
+
+## 🚀 Evolução do Projeto e Justificativas da Sprint 3
+
+Conforme a evolução do projeto e direcionamentos pedagógicos em sala, a Sprint 3 concentrou-se na maturação dos módulos essenciais e na transição do protótipo para a aplicação real:
+
+1. **Evolução do Protótipo para Aplicação Funcional:** Alinhado com a orientação do professor, a equipe evoluiu a interface diretamente do Figma inicial para o front-end web funcional e integrado, permitindo a validação de fluxos reais de uso no sistema.
+2. **Atualização da Paleta de Cores e UX:** A interface passou por um refinamento visual e ajuste na paleta de cores para aumentar o contraste dos alertas de risco, garantindo acessibilidade, clareza e rápida leitura das notificações pelos operadores no ambiente industrial.
+3. **Treinamento de Visão Computacional:** Evolução nos modelos de visão computacional (Treinamento Visão 4 e 5) para classificação precisa de imagens e detecção de comportamentos ou ausência de EPIs em câmeras IP.
+4. **Comunicação em Tempo Real via WebSocket:** Implementação e refinamento dos barramentos de alertas sonoros e visuais instantâneos, com redução no delay de integração entre Back-end e Front-end.
+5. **Gestão Ágil no Trello:** Reestruturação do board do grupo seguindo as etapas oficiais do Scrum (*Product Backlog*, *Sprint Backlog*, *Em andamento*, *Em revisão* e *Concluído*) com responsável atribuído em cada card.
+
+
+## 🎨 Protótipo de Alta Fidelidade & Mapa de Telas (Figma)
+
+O protótipo no Figma foi evoluído para cobrir a totalidade dos fluxos do sistema Liora/VisãoEPI Pro, estabelecendo a arquitetura de informação e guia de estilo para o ambiente industrial:
+
+### 1. Fluxo e Arquitetura de Telas
+- **Autenticação e Acesso:** Login, Recuperação de Senha e Cadastro de Usuários.
+- **Monitoramento Operacional:** Dashboard Geral, Central de Câmeras IP (Live Stream), Mapeamento de Setores e Zonas de Risco com vinculação de EPIs obrigatórios[cite: 3, 4].
+- **Gestão de Segurança:** Central de Alertas em Tempo Real, Inventário/Controle de EPIs e Relatórios de Conformidade[cite: 3, 4].
+- **Configurações e Perfil:** Gerenciamento de Câmeras, Perfil do Usuário e Configurações da Aplicação[cite: 3, 4].
+
+### 2. Guia de Estilo & Decisões de UX
+- **Design System:** Definição de componentes reutilizáveis para cards de câmeras, tabelas de alertas, seletores de zonas e modais.
+- **Paleta de Cores e Acessibilidade:** A paleta inicial do Figma (tons de azul com destaques em vermelho para não conformidade) foi adaptada na aplicação web funcional para maximizar o contraste e suportar o modo escuro, garantindo visibilidade imediata dos alertas no chão de fábrica.
+---
+
+## 🏗️ Arquitetura Técnica e Tecnologias
+
+A solução adota uma arquitetura orientada a eventos para garantir baixa latência na emissão de alertas:
+
+* **Front-end:** Interface web construída para exibição de dashboards de monitoramento por zonas, controle de acessos por cargo e exibição em tempo real do feed de câmeras.
+* **Back-end:** API responsável pela regra de negócio, gerenciamento de permissões, logs de auditoria e servidor WebSocket para o disparo de alertas em tempo real.
+* **Módulo de Visão Computacional:** Pipeline de processamento de imagem treinado para reconhecimento de padrões de EPIs e áreas restritas.
+* **Banco de Dados:** Estrutura relacional para registro de histórico de incidentes, colaboradores e relatórios de conformidade.
