@@ -21,8 +21,9 @@ function getRolePermissions(role = getCurrentRole()) {
     return {
         pages: admin ? [...READ_PAGES, "admin"] : READ_PAGES,
         actions: ["alerts:view", "alerts:manage", "inventory:export",
-            ...(manager ? ["inventory:create", "inventory:edit", "inventory:delete", "cameras:edit"] : []),
-            ...(admin ? ["users:create"] : [])]
+            ...(manager ? ["inventory:create", "inventory:edit", "inventory:delete", "cameras:edit", "cameras:create", "cameras:delete", "sectors:manage"] : []),
+            ...(manager ? ["vision:active-learning"] : []),
+            ...(admin ? ["users:create", "users:list", "vision:workers"] : [])]
     };
 }
 
@@ -32,6 +33,16 @@ function canAccessPage(page,role=getCurrentRole()){
 
 function canPerform(action,role=getCurrentRole()){
     return getRolePermissions(role).actions.includes(action);
+}
+
+function mutationError(result, fallback) {
+    if (result.status === 401) return "Sessão expirada. Entre novamente.";
+    if (result.status === 403) return "Seu perfil não possui permissão para esta ação.";
+    if (result.status === 404) return "Registro não encontrado. Atualize a lista.";
+    if (result.status === 409) return "O registro possui vínculos que impedem esta alteração.";
+    if (result.status === 0 || result.status === -1) return "Não foi possível conectar ao servidor. Tente novamente.";
+    if (result.status >= 500) return "O servidor não confirmou a operação. Atualize a lista antes de tentar novamente.";
+    return result.data?.error || result.data?.message || fallback;
 }
 
 // Estado explícito para gráficos sem dados ou sem biblioteca disponível.

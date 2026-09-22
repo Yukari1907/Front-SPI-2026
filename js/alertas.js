@@ -42,6 +42,7 @@ function fromApiAlerta(apiAlerta, locations) {
         id_zona: apiAlerta.id_zona,
         id_epi: apiAlerta.id_epi,
         id_monitorar: apiAlerta.id_monitorar,
+        type: apiAlerta.tipo_deteccao || "legado",
         // Nomes dos cadastros reais. Ausência não gera rótulos a partir de IDs.
         sector: name(sector),
         zone: name(zone),
@@ -135,6 +136,9 @@ function getFilteredAlerts() {
     const searchTerm = normalizeFilterText($("alertSearch")?.value);
     const severity = $("alertSeverity")?.value || "";
     const status = $("alertStatus")?.value || "";
+    const type = $("alertType")?.value || "";
+    const start = $("alertStartDate")?.value || "";
+    const end = $("alertEndDate")?.value || "";
 
     return alerts.filter(alert => {
         const searchableText = normalizeFilterText([
@@ -150,7 +154,12 @@ function getFilteredAlerts() {
         const matchesSeverity = !severity || alert.severity === severity;
         const matchesStatus = !status || alert.status === status;
 
-        return matchesSearch && matchesSeverity && matchesStatus;
+        const matchesType = !type || (type === "postura"
+            ? ["postura_tronco", "postura_rotacao", "queda"].includes(alert.type) : alert.type === type);
+        // /alertas não aceita parâmetros de data. Filtramos a coleção real localmente.
+        const day = /^\d{4}-\d{2}-\d{2}/.exec(alert.dateTime || "")?.[0];
+        const matchesDate = (!start && !end) || (day && (!start || day >= start) && (!end || day <= end));
+        return matchesSearch && matchesSeverity && matchesStatus && matchesType && matchesDate;
     });
 }
 
@@ -309,6 +318,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     $("alertSearch")?.addEventListener("input", resetAlertsPage);
     $("alertSeverity")?.addEventListener("change", resetAlertsPage);
     $("alertStatus")?.addEventListener("change", resetAlertsPage);
+    ["alertType", "alertStartDate", "alertEndDate"].forEach(id => $(id)?.addEventListener("change", resetAlertsPage));
 
     $("alertsPrevious").addEventListener("click", () => {
         if ($("alertsPrevious").disabled) return;

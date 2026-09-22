@@ -28,6 +28,8 @@ let filteredItems = [];
 let inventoryPage = 1;
 let categoryChart;
 let statusChart;
+let inventorySaving = false;
+const inventoryDeleting = new Set();
 
 const $ = id => document.getElementById(id);
 
@@ -60,10 +62,10 @@ function toApi(frontendItem) {
         nome: frontendItem.name,
         categoria: frontendItem.category,
         certificado: frontendItem.certificate || "",
-        validade: frontendItem.expiration || null,
-        estoque: Number(frontendItem.quantity) || 0,
-        quantidade_min: Number(frontendItem.minimumQuantity) || 0,
-        em_uso: Number(frontendItem.inUse) || 0
+        validade: frontendItem.expiration,
+        estoque: Number(frontendItem.quantity),
+        quantidade_min: Number(frontendItem.minimumQuantity),
+        em_uso: Number(frontendItem.inUse)
     };
 }
 
@@ -100,6 +102,8 @@ function calculateStatus(quantity, minimum, expiration) {
 // ─────────────────────────────────────────────
 
 async function loadInventoryFromApi() {
+    $("inventoryTable").innerHTML = '<tr><td colspan="8" class="empty">Carregando EPIs...</td></tr>';
+    $("inventoryTable").setAttribute("aria-busy", "true");
     const result = await apiGet("/epis");
     inventoryLoaded = result.ok && Array.isArray(result.data);
     inventoryItems = inventoryLoaded ? result.data.map(fromApi) : [];
@@ -108,6 +112,7 @@ async function loadInventoryFromApi() {
         .map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
     $("inventoryCategory").value = category;
     filterInventory();
+    $("inventoryTable").setAttribute("aria-busy", "false");
     if (!inventoryLoaded) showToast("Não foi possível carregar os EPIs.", "warning");
     return inventoryLoaded;
 }
@@ -189,8 +194,8 @@ function renderInventory() {
                             <i class="fa-solid fa-pen"></i>
                         </button>
 
-                        <button class="icon-btn" data-inventory-write="inventory:delete" onclick="deleteInventoryItem(${item.id})" title="Excluir">
-                            <i class="fa-solid fa-trash"></i>
+                        <button class="icon-btn" data-inventory-write="inventory:delete" data-delete-epi="${item.id}" ${inventoryDeleting.has(item.id) ? 'disabled aria-busy="true"' : ''} onclick="deleteInventoryItem(${item.id})" title="Excluir">
+                            <i class="fa-solid ${inventoryDeleting.has(item.id) ? 'fa-spinner fa-spin' : 'fa-trash'}"></i>
                         </button>
                     </div>
                 </td>
@@ -287,6 +292,7 @@ function filterInventory() {
 // ─────────────────────────────────────────────
 
 function openInventoryModal(item = null) {
+    if (inventorySaving) return;
     if (!canPerform(item ? "inventory:edit" : "inventory:create")) return;
     $("inventoryForm").reset();
     $("inventoryForm").elements.id.value = item?.id || "";
@@ -316,6 +322,7 @@ function openInventoryModal(item = null) {
 }
 
 function closeInventoryModal() {
+    if (inventorySaving) return;
     $("inventoryModal").classList.remove("active");
 }
 
@@ -330,23 +337,22 @@ function viewInventoryItem(id) {
 }
 
 async function deleteInventoryItem(id) {
-    if (!canPerform("inventory:delete")) return;
-    if (!confirm("Excluir EPI? Esta ação não pode ser desfeita.")) return;
-
-    const result = await apiDelete(`/epis/${id}`);
-
-    if (result.status === 0) {
-        showToast("Backend indisponível.", "warning");
-        return;
-    }
-
-    if (result.ok) {
-        inventoryItems = inventoryItems.filter(item => item.id !== id);
-        filteredItems = filteredItems.filter(item => item.id !== id);
+    if (!canPerform("inventory:delete") || inventoryDeleting.has(id)) return;
+    const item = inventoryItems.find(row => row.id === id);
+    if (!item || !confirm(`Excluir EPI "${item.name}" (ID ${id})? Esta ação não pode ser desfeita.`)) return;
+    inventoryDeleting.add(id);
+    renderInventory();
+    try {
+        const result = await apiDelete(`/epis/${id}`);
+        if (!result.ok) {
+            showToast(mutationError(result, "Falha ao excluir EPI."), "danger");
+            return;
+        }
+        if (await loadInventoryFromApi()) showToast("EPI excluído.");
+        else showToast("EPI excluído, mas a listagem não pôde ser atualizada.", "warning");
+    } finally {
+        inventoryDeleting.delete(id);
         renderInventory();
-        showToast("EPI excluído.", "danger");
-    } else {
-        showToast(result.data?.error || result.data?.message || "Falha ao excluir EPI.", "danger");
     }
 }
 
@@ -445,6 +451,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Submit do formulário (criar ou editar EPI)
     $("inventoryForm").onsubmit = async event => {
         event.preventDefault();
+        if (inventorySaving || !event.currentTarget.reportValidity()) return;
 
         const formData = Object.fromEntries(new FormData(event.currentTarget));
         const existingId = Number(formData.id);
@@ -462,37 +469,56 @@ document.addEventListener("DOMContentLoaded", async () => {
         };
 
         const apiPayload = toApi(frontendItem);
-
-        let result;
-
-        if (existingId) {
-            result = await apiPut(`/epis/${existingId}`, apiPayload);
-        } else {
-            result = await apiPost("/epis", apiPayload);
-        }
-
-        if (result.status === 0) {
-            showToast("Backend indisponível.", "warning");
+        if (![apiPayload.estoque, apiPayload.quantidade_min, apiPayload.em_uso].every(value => Number.isSafeInteger(value) && value >= 0)) {
+            showToast("Informe quantidades inteiras maiores ou iguais a zero.", "warning");
             return;
         }
+        inventorySaving = true;
+        const saveButton = $("inventoryForm").querySelector('[type="submit"]');
+        saveButton.disabled = true;
+        $("inventoryForm").setAttribute("aria-busy", "true");
 
-        if (result.ok) {
-            const savedEpi = fromApi(result.data);
-
+        try {
+            let result;
 
             if (existingId) {
-                const index = inventoryItems.findIndex(item => item.id === existingId);
-                if (index >= 0) inventoryItems[index] = savedEpi;
+                result = await apiPut(`/epis/${existingId}`, apiPayload);
             } else {
-                inventoryItems.unshift(savedEpi);
+                result = await apiPost("/epis", apiPayload);
             }
 
-            filteredItems = [...inventoryItems];
-            closeInventoryModal();
-            renderInventory();
-            showToast(existingId ? "EPI atualizado." : "EPI cadastrado.");
-        } else {
-            showToast(result.data?.error || result.data?.message || "Falha ao salvar EPI.", "danger");
+            if (result.status === 0) {
+                showToast("Backend indisponível.", "warning");
+                return;
+            }
+
+            if (result.ok) {
+                if (!Number.isSafeInteger(result.data?.id)) {
+                    showToast("Resposta inválida ao salvar EPI. Atualize a lista antes de tentar novamente.", "danger");
+                    return;
+                }
+                const savedEpi = fromApi(result.data);
+
+
+                if (existingId) {
+                    const index = inventoryItems.findIndex(item => item.id === existingId);
+                    if (index >= 0) inventoryItems[index] = savedEpi;
+                } else {
+                    inventoryItems.unshift(savedEpi);
+                }
+
+                filteredItems = [...inventoryItems];
+                inventorySaving = false;
+                closeInventoryModal();
+                renderInventory();
+                showToast(existingId ? "EPI atualizado." : "EPI cadastrado.");
+            } else {
+                showToast(mutationError(result, "Falha ao salvar EPI."), "danger");
+            }
+        } finally {
+            inventorySaving = false;
+            saveButton.disabled = false;
+            $("inventoryForm").setAttribute("aria-busy", "false");
         }
     };
 

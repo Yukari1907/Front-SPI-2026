@@ -262,7 +262,9 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                 await page.evaluate(() => renderVideoStream(currentCameraId));
                 await page.waitForSelector('#videoContainer .stream-placeholder');
                 assert.match(await page.locator('#videoContainer').innerText(), /Stream de vídeo indisponível/);
-                assert.equal(await page.locator('#zonasOverlay').count(), 0);
+                assert.equal(await page.locator('#zonasOverlay').count(), 1);
+                assert.equal(await page.locator('#zonasOverlay').isVisible(), false);
+                assert.equal(await page.locator('#videoStream').count(), 1);
                 assert(await page.locator('#videoContainer').evaluate(el => {
                     const rect = el.getBoundingClientRect();
                     return rect.width > 0 && rect.left >= 0 && rect.right <= innerWidth
@@ -1041,7 +1043,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active') && document.getElementById('riskZonesList').textContent.includes('Zona <img'));
         assert.deepEqual(zoneRequests.at(-1), { method: 'POST', body: {
             id_camera: 1, nome: 'Zona <img src=x onerror=alert(1)>', x: submittedArea.x, y: submittedArea.y,
-            largura: submittedArea.width, altura: submittedArea.height, permitido: false
+            largura: submittedArea.width, altura: submittedArea.height, permitido: false, ids_epis: []
         } });
         assert.equal(await page.locator('#riskZonesList img').count(), 0);
         assert.equal(await page.locator('#zoneName').inputValue(), '');
@@ -1129,7 +1131,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.locator('#openZoneModal').click();
         await page.waitForFunction(() => !document.getElementById('zoneEpi').disabled);
         assert.deepEqual(await page.locator('#zoneEpi option').evaluateAll(options => options.map(option => option.textContent.trim())),
-            ['Sem EPI obrigatório', 'Capacete real — Cabeça', 'Luva <b>']);
+            ['Capacete real — Cabeça', 'Luva <b>']);
         assert.equal(await page.locator('#zoneEpi b').count(), 0);
         assert.equal(await page.locator('#zoneEpi').inputValue(), '');
         assert(await page.locator('#zoneEpiGroup').isVisible());
@@ -1158,14 +1160,14 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.waitForFunction(() => !document.getElementById('zoneEpi').disabled);
         await page.locator('#zoneCamera').selectOption('1');
         await page.locator('#zoneName').fill('Zona com EPI');
-        await page.locator('#zoneEpi').selectOption('5');
+        await page.locator('#zoneEpi').selectOption(['5', '6']);
         await drawArea();
         const createdArea = await readArea();
         await page.locator('#saveZoneButton').click();
         await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active'));
         assert.deepEqual(zoneRequests.at(-1), { method: 'POST', body: {
             id_camera: 1, nome: 'Zona com EPI', permitido: false,
-            x: createdArea.x, y: createdArea.y, largura: createdArea.width, altura: createdArea.height, id_epi: 5
+            x: createdArea.x, y: createdArea.y, largura: createdArea.width, altura: createdArea.height, ids_epis: [5, 6]
         } });
         await page.locator('#openZoneModal').click();
         await page.waitForFunction(() => !document.getElementById('zoneEpi').disabled);
@@ -1175,7 +1177,8 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.locator('#saveZoneButton').click();
         await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active'));
         assert.equal('id_epi' in zoneRequests.at(-1).body, false);
-        check('Criação envia um único id_epi numérico quando escolhido e omite o campo quando não há EPI');
+        assert.deepEqual(zoneRequests.at(-1).body.ids_epis, []);
+        check('Criação envia ids_epis numéricos, múltiplos ou lista vazia, sem id_epi legado');
 
         zoneData = [{ id: 7, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, permitido: false }];
         await page.evaluate(() => loadRiskZones());
@@ -1187,7 +1190,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.equal(await page.locator('#zoneAllowed').isChecked(), false);
         assert.equal(await page.locator('#zoneEpiGroup').isVisible(), false);
         assert(await page.locator('#zoneEpiUnavailable').isVisible());
-        assert.match(await page.locator('#zoneEpiUnavailable').innerText(), /não altera essa associação/);
+        assert.match(await page.locator('#zoneEpiUnavailable').innerText(), /associações atuais serão preservadas/);
         await area.waitFor({ state: 'visible' });
         await assertArea({ x: 0.1, y: 0.2, width: 0.3, height: 0.25 });
         assert.match(await page.locator('#zoneAreaStatus').innerText(), /Área atual da zona/);

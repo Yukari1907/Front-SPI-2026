@@ -29,23 +29,30 @@ As chamadas usam `credentials: 'include'` para enviar o cookie de sessão Flask.
 - Alertas: listar e marcar como resolvido.
 - Monitoramento: câmeras, setores, stream MJPEG, polling de detecções e edição de câmera
   (nome, IP, setor, rotação e espelhamento) para admin/supervisor.
-- Mapeamento: setores, câmeras, criação de zona com EPI obrigatório e edição de zona.
+- Monitoramento aberto: zonas reconsultadas a cada 15 segundos após a resposta, preservando
+  o último overlay válido em falhas. Vídeo reconecta automaticamente com backoff de
+  5/10/20/30 segundos; timers pausam em página oculta e são limpos ao trocar câmera/sair.
+- Mapeamento: setores, câmeras, criação de zona com múltiplos EPIs obrigatórios e edição de nome/área/permissão.
+- Configuração: CRUD de setores e cadastro/exclusão de câmeras; dados consultados pelo botão “Carregar setores e câmeras”.
+- Alertas: filtros locais de tipo persistido e datas, além de busca, severidade, status e paginação de 50.
 - Dashboard: alertas recentes, alertas de hoje, estatísticas por categoria/dia e câmeras online.
-- Administração: cadastro de usuário com `POST /signup`.
+- Administração: listagem com `GET /users`, métricas derivadas e cadastro com `POST /signup`, seguido de atualização da lista.
+- Configuração / Visão Computacional: Active Learning via `POST /active-learning/toggle`, para admin/supervisor, com confirmação somente após sucesso do servidor.
 
 ### Limitações tratadas sem dados de exemplo
 
-- Administração: somente cadastro por `POST /signup`; listagem, edição, bloqueio e exclusão indisponíveis.
-- Relatórios: alertas dos últimos 30 dias, resolução e distribuição por setor calculados a partir das APIs reais; conformidade e disponibilidade histórica indisponíveis.
-- Controle de EPIs: estatísticas reais de alertas por categoria; colaboradores e conformidade indisponíveis.
+- Administração: `/users` pode retornar 500 no backend atual; a interface informa erro e permite tentar novamente. Edição, bloqueio e exclusão permanecem indisponíveis.
+- Workers: controle de lote preparado, mas bloqueado em todas as camadas do frontend porque a rota atual pode parar os workers antes de falhar. Active Learning e lote não têm GET de estado; nenhum valor inicial é presumido.
+- Relatórios: alertas dos últimos 30 dias, resolução, distribuição por setor e conformidade média das APIs reais; evolução e disponibilidade histórica indisponíveis.
+- Controle de EPIs: estatísticas reais de alertas por categoria e conformidade agregada por setor; colaboradores e conformidade individual indisponíveis.
 - Mapeamento: planta ilustrativa, câmeras/setores/zonas reais, criação e edição visual de zonas e contador online.
-- Zona: o backend aceita um único `id_epi` e apenas na criação; nenhum GET de zona devolve o EPI
-  associado e `PUT /zonas/{id}` não altera essa associação, por isso o campo não aparece na edição.
-- Câmera: `GET /cameras` não devolve rotação nem espelhamento; o formulário só reapresenta os valores
-  que o próprio backend confirmou em um PUT desta sessão e avisa que o envio substitui o gravado.
+- Zona: POST aceita `ids_epis: int[]`, inclusive lista vazia. PUT aceita substituir associações, mas os GETs
+  só devolvem categorias; a edição omite a lista para preservar vínculos. Exclusão e transferência entre câmeras permanecem bloqueadas pelo contrato atual.
+- Câmera: `GET /cameras` devolve rotação e espelhamento e o formulário usa esses valores reais.
+  O POST persiste nome, IP e setor; ajustes de imagem são feitos depois pelo PUT em Monitoramento.
 - Fonte da câmera: não há suporte a webcam configurável. O campo `ip` é a única fonte e o worker do
   servidor apenas faz um fallback automático para índices locais quando o RTSP falha.
-- Perfil: leitura de `/session`, sem edição local. Configurações: somente tema neste navegador.
+- Perfil: leitura de `/session`, sem edição local. Configurações: tema neste navegador e ajustes globais de visão conforme disponibilidade do servidor.
 - Login: cookie como fonte de autenticação; dados locais antigos não autorizam acesso.
 
 ## Páginas
@@ -66,6 +73,17 @@ Com Playwright e navegador já disponíveis (nenhuma instalação realizada nest
 node tests/frontend-integration.cjs
 node tests/zone-media.cjs
 node tests/final-audit.cjs
+node tests/settings-admin.cjs
+node tests/crud-audit.cjs
+node tests/monitoring-recovery.cjs
 ```
 
 Os testes usam API simulada e não alteram o backend. `SPI_CHROMIUM_EXECUTABLE` permite indicar um navegador instalado; `NODE_PATH` pode apontar para um Playwright já existente fora do repositório. A suíte de mídia serve MJPEG multipart por HTTP local.
+
+A suíte de recuperação usa relógio controlado e MJPEG HTTP local para cobrir falhas,
+retomada, corridas de câmera, visibilidade, limpeza e os três tamanhos nos dois temas.
+O registro desta entrega está em [ETAPA5_MONITORAMENTO.md](ETAPA5_MONITORAMENTO.md).
+
+Os contratos atuais, as pendências e os requisitos para liberar os controles estão em [CONTRATOS_BACKEND.md](CONTRATOS_BACKEND.md).
+
+A matriz CRUD, os limites da auditoria e a validação da etapa 3 estão em [AUDITORIA_CRUD_ETAPA3.md](AUDITORIA_CRUD_ETAPA3.md).

@@ -211,3 +211,29 @@ window.apiDelete = apiDelete;
 window.apiVideoUrl = apiVideoUrl;
 window.apiGetCached = apiGetCached;
 window.apiClearCached = apiClearCached;
+
+// Bloqueio do contrato atual: a rota para os workers antes de falhar no reinício.
+// Liberar SOMENTE em uma entrega validada com o backend; nunca por storage/query string.
+const VISION_CAPABILITIES = Object.freeze({ workerBatchUpdate: false });
+window.VISION_CAPABILITIES = VISION_CAPABILITIES;
+
+function apiSetActiveLearning(enabled) {
+    if (typeof enabled !== "boolean") {
+        return Promise.resolve({ ok: false, status: 400, data: { message: "Estado inválido." } });
+    }
+    return apiPost("/active-learning/toggle", { enabled });
+}
+
+function apiSetWorkerBatch(value) {
+    const size = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+    if (!Number.isSafeInteger(size) || size < 1) {
+        return Promise.resolve({ ok: false, status: 400, data: { message: "Informe um número inteiro maior ou igual a 1." } });
+    }
+    if (!VISION_CAPABILITIES.workerBatchUpdate) {
+        return Promise.resolve({ ok: false, status: 0, data: { message: "Indisponível — aguardando atualização do servidor." } });
+    }
+    return apiPost(`/video/lote/${size}`, { tamanho_lote: size });
+}
+
+window.apiSetActiveLearning = apiSetActiveLearning;
+window.apiSetWorkerBatch = apiSetWorkerBatch;

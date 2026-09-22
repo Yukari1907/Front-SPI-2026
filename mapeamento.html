@@ -136,8 +136,8 @@
                 </div>
 
                 <div class="form-group" id="zoneEpiGroup">
-                    <label for="zoneEpi">EPI obrigatório</label>
-                    <select id="zoneEpi" name="id_epi" disabled>
+                    <label for="zoneEpi">EPIs obrigatórios</label>
+                    <select id="zoneEpi" name="ids_epis" multiple size="4" aria-describedby="zoneEpiHint" disabled>
                         <option value="">Carregando EPIs cadastrados…</option>
                     </select>
                     <small id="zoneEpiHint" class="text-muted">
@@ -146,10 +146,10 @@
                 </div>
 
                 <div class="form-group" id="zoneEpiUnavailable" hidden>
-                    <label>EPI obrigatório</label>
+                    <label>EPIs obrigatórios</label>
                     <small class="text-muted">
-                        Indisponível na edição: o backend não retorna o EPI associado à zona
-                        e <code>PUT /zonas/{id}</code> não altera essa associação.
+                        Edição das associações indisponível: os IDs dos EPIs associados não são retornados.
+                        As associações atuais serão preservadas ao salvar a zona.
                     </small>
                 </div>
 

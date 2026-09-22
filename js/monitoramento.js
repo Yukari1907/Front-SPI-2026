@@ -28,9 +28,8 @@ let monitoramentoCameras = [];
 let monitoramentoSetores = [];
 let currentCameraId = null;
 
-// GET /cameras e GET /cameras/status não devolvem rotacao/espelhar_*; somente a
-// resposta do PUT devolve. Guardamos o que o backend confirmou nesta página
-// para reapresentar no formulário, sem persistir nem inventar valor.
+// GET /cameras agora retorna transformações. Mantemos o último PUT confirmado
+// como fallback para respostas antigas sem esses campos.
 const camerasTransformacoesAplicadas = new Map();
 
 // ─────────────────────────────────────────────
@@ -178,11 +177,45 @@ function renderCameraListSelection() {
 // Stream de vídeo
 // ─────────────────────────────────────────────
 
+// Zonas: 15 s após cada resposta, sem sobreposição. Vídeo: backoff 5/10/20/30 s.
+// Sondagem local: 500 ms até o primeiro frame e 5 s depois. MJPEG pode não emitir
+// load/error, inclusive ao perder a imagem após desconexão. Não faz fetch de frames.
+const ZONAS_POLL_MS = 15000;
+const STREAM_RETRY_BASE_MS = 5000;
+const STREAM_RETRY_MAX_MS = 30000;
+const STREAM_FIRST_FRAME_TIMEOUT_MS = 30000;
+const STREAM_IMAGE_CHECK_MS = 5000;
+let monitoringContext = null;
+
+function isCurrentMonitoringContext(context) {
+    return context && monitoringContext === context
+        && context.img === document.getElementById("videoStream");
+}
+
+function clearMonitoringTimers(context) {
+    if (!context) return;
+    for (const key of ["zonesTimer", "retryTimer", "frameTimer"]) {
+        clearTimeout(context[key]);
+        context[key] = null;
+    }
+}
+
+function stopVideoMonitoring() {
+    const context = monitoringContext;
+    monitoringContext = null; // Invalida inclusive respostas pendentes de A → B → A.
+    clearMonitoringTimers(context);
+    if (context) {
+        context.img.onload = null;
+        context.img.onerror = null;
+        context.img.removeAttribute("src");
+    }
+}
+
 function renderVideoStream(cameraId) {
     const container = document.getElementById("videoContainer");
     if (!container) return;
 
-    const streamUrl = apiVideoUrl(cameraId);
+    stopVideoMonitoring();
 
     // O CSS dimensiona o wrapper pela imagem, sem presumir a proporção da câmera.
     currentCameraZonas = [];
@@ -190,32 +223,103 @@ function renderVideoStream(cameraId) {
         <div id="streamWrapper">
             <img
                 id="videoStream"
-                src="${streamUrl}"
                 alt="Carregando stream da câmera ${cameraId}"
-                onerror="handleStreamError(this)"
             >
             <!-- SVG sobreposto ao frame -->
             <svg id="zonasOverlay"></svg>
+            <div id="streamUnavailable" class="stream-placeholder" role="status" hidden>
+                <i class="fa-solid fa-video-slash" style="font-size:48px;margin-bottom:16px;display:block;"></i>
+                Stream de vídeo indisponível.<br>
+                <small>Tentando reconectar automaticamente.</small>
+            </div>
         </div>
     `;
 
-    // Dispara a busca das zonas da câmera selecionada
-    fetchZonas(cameraId);
+    const context = monitoringContext = {
+        cameraId,
+        img: document.getElementById("videoStream"),
+        overlay: document.getElementById("zonasOverlay"),
+        placeholder: document.getElementById("streamUnavailable"),
+        zonesInFlight: false, zonesTimer: null, retryTimer: null, frameTimer: null,
+        failures: 0, attempt: 0, state: "loading"
+    };
+    context.img.onerror = () => handleStreamError(context.img);
+    context.img.onload = () => markStreamReady(context);
+    openStream(context);
+    fetchZonas(cameraId, context);
 }
 
 function handleStreamError(img) {
-    if (img !== document.getElementById("videoStream")) return;
-    img.onerror = null; // Previne loop infinito
-    const container = document.getElementById("videoContainer");
-    if (container) {
-        container.innerHTML = `
-            <div class="stream-placeholder">
-                <i class="fa-solid fa-video-slash" style="font-size:48px;margin-bottom:16px;display:block;"></i>
-                Stream de vídeo indisponível.<br>
-                <small>Verifique se a câmera está conectada e o backend em execução.</small>
-            </div>
-        `;
+    const context = monitoringContext;
+    if (!isCurrentMonitoringContext(context) || context.img !== img || context.state === "failed") return;
+    clearTimeout(context.frameTimer);
+    context.frameTimer = null;
+    context.state = "failed";
+    context.failures += 1;
+    img.hidden = true;
+    context.overlay.setAttribute("hidden", "");
+    context.placeholder.hidden = false;
+    img.removeAttribute("src");
+    scheduleStreamRetry(context);
+}
+
+function markStreamReady(context) {
+    if (!isCurrentMonitoringContext(context) || context.state !== "loading"
+        || !context.img.naturalWidth || !context.img.naturalHeight) return;
+    clearTimeout(context.frameTimer);
+    context.frameTimer = null;
+    context.state = "ready";
+    context.failures = 0;
+    context.img.alt = `Stream da câmera ${context.cameraId}`;
+    context.img.hidden = false;
+    context.overlay.removeAttribute("hidden");
+    context.placeholder.hidden = true;
+    if (document.visibilityState !== "hidden") {
+        context.frameTimer = setTimeout(() => watchStreamFrame(context), STREAM_IMAGE_CHECK_MS);
     }
+}
+
+function watchStreamFrame(context) {
+    if (!isCurrentMonitoringContext(context) || context.state === "failed"
+        || document.visibilityState === "hidden") return;
+    clearTimeout(context.frameTimer);
+    context.frameTimer = null;
+    if (context.state === "ready") {
+        if (!context.img.naturalWidth || !context.img.naturalHeight) handleStreamError(context.img);
+        else context.frameTimer = setTimeout(() => watchStreamFrame(context), STREAM_IMAGE_CHECK_MS);
+        return;
+    }
+    markStreamReady(context);
+    if (context.state !== "loading") return;
+    if (Date.now() - context.startedAt >= STREAM_FIRST_FRAME_TIMEOUT_MS) {
+        handleStreamError(context.img);
+        return;
+    }
+    context.frameTimer = setTimeout(() => {
+        context.frameTimer = null;
+        watchStreamFrame(context);
+    }, 500);
+}
+
+function openStream(context, retry = false) {
+    if (!isCurrentMonitoringContext(context)) return;
+    context.state = "loading";
+    context.startedAt = Date.now();
+    const url = new URL(apiVideoUrl(context.cameraId), document.baseURI);
+    // Query ignorada pela rota Flask; preserva outros parâmetros, se houver.
+    if (retry) url.searchParams.set("retry", `${Date.now()}-${++context.attempt}`);
+    context.img.src = url.href;
+    watchStreamFrame(context);
+}
+
+function scheduleStreamRetry(context) {
+    if (!isCurrentMonitoringContext(context) || context.retryTimer !== null
+        || document.visibilityState === "hidden") return;
+    const delay = Math.min(STREAM_RETRY_MAX_MS, STREAM_RETRY_BASE_MS * 2 ** Math.min(context.failures - 1, 3));
+    context.retryTimer = setTimeout(() => {
+        context.retryTimer = null;
+        if (isCurrentMonitoringContext(context) && document.visibilityState !== "hidden") openStream(context, true);
+    }, delay);
 }
 
 // ─────────────────────────────────────────────
@@ -280,6 +384,7 @@ async function fetchDetections(cameraId, version = detectionsPollVersion) {
 
 function startDetectionsPolling(cameraId) {
     stopDetectionsPolling();
+    if (document.visibilityState === "hidden") return;
     detectionsCameraId = cameraId;
     const version = detectionsPollVersion;
     renderDetectionState(null, "Consultando câmera...");
@@ -306,23 +411,31 @@ let currentCameraZonas = [];
 // Busca e Renderização de Zonas
 // ─────────────────────────────────────────────
 
-async function fetchZonas(cameraId) {
-    const overlay = document.getElementById("zonasOverlay");
+async function fetchZonas(cameraId, context = monitoringContext) {
+    if (!isCurrentMonitoringContext(context) || context.cameraId !== cameraId
+        || context.zonesInFlight || document.visibilityState === "hidden") return;
+    clearTimeout(context.zonesTimer);
+    context.zonesTimer = null;
+    context.zonesInFlight = true;
     try {
         const result = await apiGet(`/zonas/camera/${cameraId}`);
-        // Descarta respostas de streams substituídos, inclusive na troca A → B → A.
-        if (overlay !== document.getElementById("zonasOverlay")) return;
-        if (result.ok && Array.isArray(result.data)) {
+        if (!isCurrentMonitoringContext(context)) return;
+        // Erro HTTP/rede/formato não apaga a última leitura válida. [] válido limpa.
+        const valid = result.ok && Array.isArray(result.data) && result.data.every(zona =>
+            zona && [zona.x, zona.y, zona.largura, zona.altura].every(value =>
+                typeof value === "number" && Number.isFinite(value)));
+        if (valid) {
             currentCameraZonas = result.data;
-        } else {
-            currentCameraZonas = [];
+            renderZonasOverlay();
         }
     } catch (e) {
-        if (overlay !== document.getElementById("zonasOverlay")) return;
-        console.error("[Monitoramento] Erro ao buscar zonas:", e);
-        currentCameraZonas = [];
+        // A próxima leitura recupera sem interferir no stream ou nas detecções.
+    } finally {
+        context.zonesInFlight = false;
+        if (isCurrentMonitoringContext(context) && document.visibilityState !== "hidden") {
+            context.zonesTimer = setTimeout(() => fetchZonas(cameraId, context), ZONAS_POLL_MS);
+        }
     }
-    renderZonasOverlay();
 }
 
 function renderZonasOverlay() {
@@ -337,7 +450,7 @@ function renderZonasOverlay() {
     // A proporção da "Golden Ratio" garante que tons fiquem bem espalhados pela roda de cores
     const GOLDEN_RATIO_CONJUGATE = 0.618033988749895;
 
-    overlay.innerHTML = currentCameraZonas.map((zona, index) => {
+    const fragments = currentCameraZonas.map((zona, index) => {
         // Conversão de escala 0.0-1.0 para porcentagem (%)
         const x = (zona.x * 100).toFixed(2);
         const y = (zona.y * 100).toFixed(2);
@@ -356,7 +469,7 @@ function renderZonasOverlay() {
         const badgeBg     = `hsl(${hue}, 75%, 42%)`;        // Fundo sólido e elegante da etiqueta
 
         return `
-            <g class="zona-group" data-id="${zona.id}">
+            <g class="zona-group" data-id="${escapeHtml(String(zona.id))}">
                 <!-- Retângulo da zona -->
                 <rect 
                     x="${x}%" y="${y}%" 
@@ -392,7 +505,27 @@ function renderZonasOverlay() {
                 </foreignObject>
             </g>
         `;
-    }).join("");
+    });
+
+    // Reutiliza grupos inalterados; substitui apenas a zona cujo desenho mudou.
+    const groups = new Map([...overlay.children].map(group => [group.dataset.id, group]));
+    const seen = new Set();
+    fragments.forEach((markup, index) => {
+        const id = String(currentCameraZonas[index].id);
+        if (seen.has(id)) return;
+        seen.add(id);
+        let group = groups.get(id);
+        if (!group || group._zonaMarkup !== markup) {
+            const draft = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            draft.innerHTML = markup;
+            const replacement = draft.firstElementChild;
+            replacement._zonaMarkup = markup;
+            if (group) group.replaceWith(replacement);
+            group = replacement;
+        }
+        if (overlay.children[seen.size - 1] !== group) overlay.insertBefore(group, overlay.children[seen.size - 1] || null);
+    });
+    groups.forEach((group, id) => { if (!seen.has(id)) group.remove(); });
 }
 
 // ─────────────────────────────────────────────
@@ -440,6 +573,7 @@ function configureCameraEditing() {
     };
 
     openButton.addEventListener("click", () => {
+        if (!canPerform("cameras:edit")) return;
         const camera = monitoramentoCameras.find(item => item.id === currentCameraId);
         if (!camera) {
             showToast("Selecione uma câmera cadastrada para editar.", "warning");
@@ -456,14 +590,14 @@ function configureCameraEditing() {
             showError("Nenhum setor disponível: o backend exige um setor válido para salvar a câmera.");
         }
 
-        // GET não devolve rotação/espelhamento: só reapresentamos o que o
-        // próprio backend confirmou em um PUT desta sessão.
-        const applied = camerasTransformacoesAplicadas.get(camera.id);
+        const fromRead = CAMERA_ROTATIONS.includes(camera.rotacao)
+            && typeof camera.espelhar_horizontal === "boolean" && typeof camera.espelhar_vertical === "boolean";
+        const applied = fromRead ? camera : camerasTransformacoesAplicadas.get(camera.id);
         document.getElementById("cameraRotation").value = String(applied?.rotacao ?? 0);
         document.getElementById("cameraMirrorH").checked = applied?.espelhar_horizontal === true;
         document.getElementById("cameraMirrorV").checked = applied?.espelhar_vertical === true;
         document.getElementById("cameraTransformNote").textContent = applied
-            ? "Rotação e espelhamento confirmados pelo backend ao salvar nesta sessão."
+            ? "Rotação e espelhamento confirmados pelo backend."
             : "O backend não informa a rotação e o espelhamento atuais: o valor enviado aqui substitui o que estiver gravado.";
 
         modal.classList.add("active");
@@ -493,7 +627,7 @@ function configureCameraEditing() {
 
     form.addEventListener("submit", async event => {
         event.preventDefault();
-        if (saveButton.disabled || !form.reportValidity()) return;
+        if (!canPerform("cameras:edit") || saveButton.disabled || !form.reportValidity()) return;
 
         const cameraId = currentCameraId;
         const fields = new FormData(form);
@@ -517,7 +651,7 @@ function configureCameraEditing() {
 
         // Tipos exatos do CameraDTO: strings, inteiro e booleanos reais.
         const payload = {
-            nome: nome || null,
+            nome,
             ip,
             id_setor: idSetor,
             rotacao,
@@ -584,8 +718,31 @@ document.addEventListener("DOMContentLoaded", async () => {
     loadMonitoramento();
 });
 
-// Para o polling ao sair da página
-window.addEventListener("pagehide", stopDetectionsPolling);
-window.addEventListener("beforeunload", stopDetectionsPolling);
+function stopMonitoring() {
+    stopVideoMonitoring();
+    stopDetectionsPolling();
+}
+
+document.addEventListener("visibilitychange", () => {
+    const context = monitoringContext;
+    if (!isCurrentMonitoringContext(context)) return;
+    if (document.visibilityState === "hidden") {
+        clearMonitoringTimers(context);
+        stopDetectionsPolling();
+    } else {
+        fetchZonas(context.cameraId, context);
+        if (context.state === "failed") scheduleStreamRetry(context);
+        else watchStreamFrame(context);
+        startDetectionsPolling(context.cameraId);
+    }
+});
+window.addEventListener("pagehide", stopMonitoring);
+window.addEventListener("beforeunload", stopMonitoring);
+window.addEventListener("pageshow", event => {
+    if (event.persisted && currentCameraId !== null && !monitoringContext) {
+        renderVideoStream(currentCameraId);
+        startDetectionsPolling(currentCameraId);
+    }
+});
 
 window.handleStreamError = handleStreamError;

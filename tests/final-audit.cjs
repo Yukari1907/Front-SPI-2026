@@ -25,6 +25,9 @@ let stats = [{ categoria: 'Auditiva', total: 7 }, { categoria: 'Sem Categoria', 
                 else if(url.pathname === '/logout') { status = logoutStatus; data = {message:'OK'}; }
                 else if(url.pathname === '/login') { status = 200; data = {user}; }
                 else if(url.pathname === '/signup') { status = 201; data = {message:'Signup successful'}; }
+                else if(url.pathname === '/users') { status = 500; data = {message:'Erro interno do servidor'}; }
+                else if(url.pathname === '/estatisticas/conformidade') { status = 500; data = {message:'Estatísticas indisponíveis'}; }
+                else if(url.pathname.startsWith('/estatisticas/setor/')) { status = 500; data = {message:'Estatísticas indisponíveis'}; }
                 else if(url.pathname === '/alertas') data = alerts;
                 else if(url.pathname === '/alertas/estatisticas/epi') data = stats;
                 else if(url.pathname === '/alertas/estatisticas/periodo') data = [{dia:day,total:2}];
@@ -85,7 +88,7 @@ let stats = [{ categoria: 'Auditiva', total: 7 }, { categoria: 'Sem Categoria', 
         assert.deepEqual(await page.evaluate(()=>charts.ppeIssueChart.data.datasets[0].data),[7,2]);
         check('Conformidade não inventa trabalhadores nem percentuais; gráfico representa alertas de EPI');
         await page.evaluate(()=>{localStorage.setItem('visaoepi_users',JSON.stringify([{name:'Falso'}]));localStorage.setItem('visaoepi_profile',JSON.stringify({name:'Falso',role:'admin'}));});
-        await visit('administracao');assert.match(await page.locator('#usersTable').innerText(),/indisponível/);
+        await visit('administracao');await page.waitForFunction(()=>document.getElementById('usersTable').textContent.includes('Não foi possível carregar os usuários.'));assert.match(await page.locator('#usersTable').innerText(),/Não foi possível carregar os usuários/);
         assert.doesNotMatch(await page.locator('body').innerText(),/Falso/);
         await page.locator('#openUserModal').click();await page.locator('[name="name"]').fill('Novo Teste');await page.locator('[name="email"]').fill('novo@example.test');await page.locator('[name="password"]').fill('test-only-password');await page.locator('[name="role"]').selectOption('supervisor');await page.locator('#userForm [type="submit"]').click();
         await page.waitForFunction(()=>!document.getElementById('userModal').classList.contains('active'));

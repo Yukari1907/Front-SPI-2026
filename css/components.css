@@ -1112,4 +1112,7 @@ body[data-page="alerts"] .table-wrap td:nth-child(3){
 .notification-clear-btn i{
     font-size:12px;
 }
+[hidden] {
+    display: none !important;
+}
 
