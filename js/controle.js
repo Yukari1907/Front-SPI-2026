@@ -1,6 +1,72 @@
+"use strict";
 
-// Não há contrato de colaboradores ou conformidade individual.
-const monitoredWorkers=[];
+/**
+ * controle.js — Conformidade de EPIs com dados reais do backend.
+ *
+ *   Conformes / Não conformes / Detecções avaliadas / Taxa de conformidade
+ *     → GET /estatisticas/conformes → {total_conformes, total_nao_conformes}
+ *   Conformidade por setor  → GET /setores + GET /estatisticas/setor/{id}
+ *   Alertas por categoria   → GET /alertas/estatisticas/epi
+ *
+ * Semântica de /estatisticas/conformes: soma histórica global da tabela de
+ * estatísticas. A rota não aceita data, setor, câmera, zona nem EPI, por isso os
+ * quatro cards declaram "Total acumulado" e não acompanham o recorte de 30 dias do
+ * gráfico por setor. São detecções amostradas, não pessoas distintas.
+ *
+ * Zero real aparece como 0; erro e resposta fora do contrato mantêm "—".
+ */
+
+/**
+ * Valor de contagem aceito pelo contrato, ou null quando fora dele.
+ * @param {unknown} raw
+ * @returns {number|null}
+ */
+function complianceCount(raw) {
+    if (typeof raw !== "number" && typeof raw !== "string") return null;
+    if (raw === "") return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function setComplianceCard(valueId, stateId, value, state) {
+    const valueElement = document.getElementById(valueId);
+    const stateElement = document.getElementById(stateId);
+    if (valueElement) valueElement.textContent = value;
+    if (stateElement) stateElement.textContent = state;
+}
+
+const COMPLIANCE_CARDS = ["compliantCount", "nonCompliantCount", "evaluatedCount", "complianceRate"];
+const COMPLIANCE_STATES = ["compliantState", "nonCompliantState", "evaluatedState", "complianceRateState"];
+
+async function loadComplianceCounts() {
+    const result = await apiGetComplianceCounts();
+    const compliant = complianceCount(result.data?.total_conformes);
+    const nonCompliant = complianceCount(result.data?.total_nao_conformes);
+
+    if (!result.ok || compliant === null || nonCompliant === null) {
+        const state = result.status === 403
+            ? "Seu perfil não possui permissão para esta consulta."
+            : result.status === 0 || result.status === -1
+                ? "Não foi possível conectar ao servidor."
+                : "Dados indisponíveis";
+        COMPLIANCE_CARDS.forEach((id, index) => setComplianceCard(id, COMPLIANCE_STATES[index], "—", state));
+        return;
+    }
+
+    const total = compliant + nonCompliant;
+    setComplianceCard("compliantCount", "compliantState", compliant.toLocaleString("pt-BR"), "Total acumulado");
+    setComplianceCard("nonCompliantCount", "nonCompliantState", nonCompliant.toLocaleString("pt-BR"), "Total acumulado");
+    setComplianceCard("evaluatedCount", "evaluatedState", total.toLocaleString("pt-BR"), "Detecções avaliadas, não pessoas");
+
+    // Sem denominador válido não há taxa: uma base sem observação não é 100%.
+    if (total === 0) {
+        setComplianceCard("complianceRate", "complianceRateState", "—", "Sem observações registradas");
+        return;
+    }
+    setComplianceCard("complianceRate", "complianceRateState",
+        `${(compliant / total * 100).toFixed(1).replace(".", ",")}%`,
+        "Conformes sobre o total acumulado");
+}
 
 async function loadSectorCompliance() {
     const result = await apiGet("/setores");
@@ -46,64 +112,11 @@ async function loadSectorCompliance() {
     }
 }
 
-function getInitials(name){
-    return name.split(/\s+/).slice(0,2).map(part=>part[0]).join("").toUpperCase();
-}
-
-function openWorkerDetails(workerId){
-    const worker=monitoredWorkers.find(item=>item.id===workerId);
-    if(!worker)return;
-
-    document.getElementById("workerAvatar").textContent=getInitials(worker.name);
-    document.getElementById("workerName").textContent=worker.name;
-    document.getElementById("workerSector").textContent=worker.sector;
-    document.getElementById("workerLastCheck").textContent=worker.lastCheck;
-    document.getElementById("workerStatus").innerHTML=`<span class="badge ${worker.badge}">${worker.status}</span>`;
-    document.getElementById("workerRegistration").textContent=worker.registration;
-    document.getElementById("workerShift").textContent=worker.shift;
-
-    document.getElementById("workerPpeList").innerHTML=worker.ppes.map(item=>`
-        <div class="worker-ppe-item">
-            <strong>${item[0]}</strong>
-            <span class="badge ${item[2]}">${item[1]}</span>
-        </div>
-    `).join("");
-
-    document.getElementById("registerWorkerAction").onclick=()=>{
-        showToast("Registro de ações indisponível.", "warning");
-    };
-
-    document.getElementById("workerModal").classList.add("active");
-}
-
-function closeWorkerDetails(){
-    document.getElementById("workerModal").classList.remove("active");
-}
-
 document.addEventListener("DOMContentLoaded", async () => {
     if (!await window.sessionReady) return;
-    document.getElementById("workersTable").innerHTML=monitoredWorkers.map(worker=>`
-        <tr>
-            <td>${worker.name}</td>
-            <td>${worker.sector}</td>
-            <td>${worker.lastCheck}</td>
-            <td><span class="badge ${worker.badge}">${worker.status}</span></td>
-            <td>
-                <button class="icon-btn" type="button" onclick="openWorkerDetails(${worker.id})" title="Visualizar colaborador">
-                    <i class="fa-solid fa-eye"></i>
-                </button>
-            </td>
-        </tr>
-    `).join("") || '<tr><td colspan="5" class="empty">Dados de colaboradores indisponíveis.</td></tr>';
-
-    document.getElementById("closeWorkerModal").onclick=closeWorkerDetails;
-    document.getElementById("closeWorkerModalFooter").onclick=closeWorkerDetails;
-    document.getElementById("workerModal").addEventListener("click",event=>{
-        if(event.target===document.getElementById("workerModal"))closeWorkerDetails();
-    });
-
     showChartState("sectorChart", "Carregando conformidade por setor...");
     loadSectorCompliance();
+    loadComplianceCounts();
     const result = await apiGet("/alertas/estatisticas/epi");
     if (!result.ok || !Array.isArray(result.data) || !result.data.length || typeof Chart !== "function") {
         showChartState("ppeIssueChart", result.ok && Array.isArray(result.data) && !result.data.length
@@ -123,5 +136,3 @@ document.addEventListener("DOMContentLoaded", async () => {
         options: { responsive: true, maintainAspectRatio: false, cutout: "60%" }
     });
 });
-
-window.openWorkerDetails=openWorkerDetails;

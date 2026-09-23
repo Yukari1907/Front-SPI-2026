@@ -60,7 +60,7 @@ async function loadMonitoramento() {
             cameraList.innerHTML = `
                 <div style="padding:16px;color:var(--danger)">
                     <i class="fa-solid fa-triangle-exclamation"></i>
-                    Não foi possível conectar ao backend. Verifique se o servidor está em execução.
+                    Não foi possível conectar ao servidor. Tente novamente.
                 </div>
             `;
             return;
@@ -567,6 +567,7 @@ function configureCameraEditing() {
 
     const close = () => {
         if (saveButton.disabled) return;
+        form.reset();
         modal.classList.remove("active");
         showError("");
         openButton.focus();
@@ -587,7 +588,7 @@ function configureCameraEditing() {
         document.getElementById("cameraIp").value = camera.ip || "";
 
         if (!renderCameraSectorOptions(camera)) {
-            showError("Nenhum setor disponível: o backend exige um setor válido para salvar a câmera.");
+            showError("Nenhum setor disponível. A câmera precisa pertencer a um setor cadastrado.");
         }
 
         const fromRead = CAMERA_ROTATIONS.includes(camera.rotacao)
@@ -597,8 +598,8 @@ function configureCameraEditing() {
         document.getElementById("cameraMirrorH").checked = applied?.espelhar_horizontal === true;
         document.getElementById("cameraMirrorV").checked = applied?.espelhar_vertical === true;
         document.getElementById("cameraTransformNote").textContent = applied
-            ? "Rotação e espelhamento confirmados pelo backend."
-            : "O backend não informa a rotação e o espelhamento atuais: o valor enviado aqui substitui o que estiver gravado.";
+            ? "Rotação e espelhamento atuais da câmera."
+            : "Não foi possível confirmar a rotação e o espelhamento atuais. Ao salvar, os valores escolhidos substituirão os anteriores.";
 
         modal.classList.add("active");
         document.getElementById("cameraName").focus();
@@ -645,7 +646,7 @@ function configureCameraEditing() {
             return;
         }
         if (!CAMERA_ROTATIONS.includes(rotacao)) {
-            showError("Selecione uma rotação suportada pelo backend.");
+            showError("Selecione uma das rotações disponíveis.");
             return;
         }
 

@@ -28,6 +28,9 @@ let stats = [{ categoria: 'Auditiva', total: 7 }, { categoria: 'Sem Categoria', 
                 else if(url.pathname === '/users') { status = 500; data = {message:'Erro interno do servidor'}; }
                 else if(url.pathname === '/estatisticas/conformidade') { status = 500; data = {message:'Estatísticas indisponíveis'}; }
                 else if(url.pathname.startsWith('/estatisticas/setor/')) { status = 500; data = {message:'Estatísticas indisponíveis'}; }
+                else if(url.pathname === '/estatisticas/conformes') { status = 500; data = {message:'Estatísticas indisponíveis'}; }
+                else if(url.pathname === '/active-learning/status') { status = 500; data = {message:'Erro interno do servidor'}; }
+                else if(url.pathname === '/video/lote') { status = 503; data = {message:'Nenhum worker ativo no momento.'}; }
                 else if(url.pathname === '/alertas') data = alerts;
                 else if(url.pathname === '/alertas/estatisticas/epi') data = stats;
                 else if(url.pathname === '/alertas/estatisticas/periodo') data = [{dia:day,total:2}];
@@ -83,7 +86,12 @@ let stats = [{ categoria: 'Auditiva', total: 7 }, { categoria: 'Sem Categoria', 
         check('Relatórios distinguem erro de lista vazia e não dividem por zero');
         await visit('controle-de-epis');await page.waitForSelector('#ppeIssueChart');
         await page.waitForFunction(()=>window.charts?.ppeIssueChart);
-        assert.match(await page.locator('#workersTable').innerText(),/indisponíveis/);
+        // A tabela de colaboradores e o modal de ações saíram da tela: não havia
+        // contrato por trás deles, só um aviso permanente de indisponibilidade.
+        assert.equal(await page.locator('#workersTable').count(),0);
+        assert.equal(await page.locator('#workerModal').count(),0);
+        assert.doesNotMatch(await page.locator('body').innerText(),/Colaboradores Monitorados|Registrar ação/);
+        // /estatisticas/conformes em 500 mantém os quatro cards em "—": erro nunca vira zero.
         assert.deepEqual(await page.locator('.kpi strong').allTextContents(),['—','—','—','—']);
         assert.deepEqual(await page.evaluate(()=>charts.ppeIssueChart.data.datasets[0].data),[7,2]);
         check('Conformidade não inventa trabalhadores nem percentuais; gráfico representa alertas de EPI');

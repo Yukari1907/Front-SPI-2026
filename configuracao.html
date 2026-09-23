@@ -18,7 +18,6 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/common.js" defer></script>
     <script src="js/configuracao.js" defer></script>
-    <script src="js/cadastros.js" defer></script>
 </head>
 
 <body class="app-layout" data-page="settings">
@@ -65,35 +64,6 @@
 </div>
 
 <div class="grid settings-grid">
-    <article class="card registry-settings" id="registryPanel">
-        <div class="section-title"><h2>Setores e câmeras</h2></div>
-        <p class="text-muted" id="registryPermission">Consulte os cadastros para gerenciar os setores e as câmeras.</p>
-        <button class="btn secondary" id="loadRegistries" type="button">Carregar setores e câmeras</button>
-        <p id="registryFeedback" role="status" aria-live="polite"></p>
-        <div class="grid registry-grid">
-            <section aria-labelledby="sectorsTitle">
-                <h3 id="sectorsTitle">Setores</h3>
-                <div id="sectorsRegistry" aria-live="polite">Aguardando consulta.</div>
-                <form id="sectorForm" hidden>
-                    <input type="hidden" name="id">
-                    <div class="form-group"><label for="sectorName">Nome do setor</label><input id="sectorName" name="nome" required maxlength="100"></div>
-                    <div class="vision-actions"><button class="btn" type="submit" id="saveSector">Criar setor</button><button class="btn secondary" type="button" id="cancelSector" hidden>Cancelar edição</button></div>
-                </form>
-            </section>
-            <section aria-labelledby="camerasTitle">
-                <h3 id="camerasTitle">Câmeras</h3>
-                <div id="camerasRegistry" aria-live="polite">Aguardando consulta.</div>
-                <form id="cameraCreateForm" hidden>
-                    <div class="form-group"><label for="newCameraName">Nome da câmera</label><input id="newCameraName" name="nome" required maxlength="100"></div>
-                    <div class="form-group"><label for="newCameraIp">Endereço/IP</label><input id="newCameraIp" name="ip" required maxlength="255"></div>
-                    <div class="form-group"><label for="newCameraSector">Setor</label><select id="newCameraSector" name="id_setor" required disabled></select></div>
-                    <p class="text-muted">Após cadastrar, ajuste rotação e espelhamento em Monitoramento.</p>
-                    <button class="btn" type="submit" id="saveNewCamera" disabled>Criar câmera</button>
-                </form>
-                <a class="btn secondary" href="monitoramento.html">Abrir Monitoramento</a>
-            </section>
-        </div>
-    </article>
     <article class="card vision-settings">
         <div class="section-title"><h2>Visão Computacional</h2></div>
 
@@ -113,7 +83,7 @@
         <section class="vision-control" aria-labelledby="workerBatchTitle">
             <h3 id="workerBatchTitle">Tamanho do lote de workers</h3>
             <p class="text-muted" id="workerBatchDescription">A alteração reorganiza e reinicia os workers que processam as câmeras.</p>
-            <p id="workerBatchState" role="status">Valor atual: indisponível</p>
+            <p id="workerBatchState" role="status" aria-live="polite">Valor atual: indisponível</p>
             <form id="workerBatchForm" class="vision-actions">
                 <div class="form-group">
                     <label for="workerBatchSize">Câmeras por lote</label>
@@ -121,7 +91,7 @@
                 </div>
                 <button type="submit" class="btn" id="applyWorkerBatch" disabled>Aplicar</button>
             </form>
-            <p id="workerBatchAvailability" class="text-muted">Indisponível — aguardando atualização do servidor.</p>
+            <p id="workerBatchAvailability" class="text-muted">A alteração do lote está indisponível nesta versão.</p>
             <p class="text-muted" id="workerBatchPermission">Alteração reservada a administradores.</p>
             <p id="workerBatchFeedback" role="status" aria-live="polite"></p>
         </section>

@@ -107,10 +107,7 @@ async function loadInventoryFromApi() {
     const result = await apiGet("/epis");
     inventoryLoaded = result.ok && Array.isArray(result.data);
     inventoryItems = inventoryLoaded ? result.data.map(fromApi) : [];
-    const category = $("inventoryCategory").value;
-    $("inventoryCategory").innerHTML = '<option value="">Todas</option>' + [...new Set(inventoryItems.map(item => item.category))]
-        .map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
-    $("inventoryCategory").value = category;
+    updateInventoryCategories();
     filterInventory();
     $("inventoryTable").setAttribute("aria-busy", "false");
     if (!inventoryLoaded) showToast("Não foi possível carregar os EPIs.", "warning");
@@ -287,6 +284,15 @@ function filterInventory() {
     renderInventory();
 }
 
+function updateInventoryCategories() {
+    const select = $("inventoryCategory");
+    const previous = select.value;
+    const categories = [...new Set(inventoryItems.map(item => item.category))];
+    select.innerHTML = '<option value="">Todas</option>' + categories
+        .map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join("");
+    select.value = categories.includes(previous) ? previous : "";
+}
+
 // ─────────────────────────────────────────────
 // Modal
 // ─────────────────────────────────────────────
@@ -380,7 +386,7 @@ function exportInventoryCsv() {
     ]);
 
     const csv = [header, ...rows]
-        .map(row => row.map(value => `"${String(value ?? "").replaceAll('"', '""')}"`).join(";"))
+        .map(row => row.map(csvEscape).join(";"))
         .join("\n");
 
     const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv" }));
@@ -488,7 +494,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             if (result.status === 0) {
-                showToast("Backend indisponível.", "warning");
+                showToast("Não foi possível conectar ao servidor.", "warning");
                 return;
             }
 
@@ -507,10 +513,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                     inventoryItems.unshift(savedEpi);
                 }
 
-                filteredItems = [...inventoryItems];
+                updateInventoryCategories();
                 inventorySaving = false;
                 closeInventoryModal();
-                renderInventory();
+                filterInventory();
                 showToast(existingId ? "EPI atualizado." : "EPI cadastrado.");
             } else {
                 showToast(mutationError(result, "Falha ao salvar EPI."), "danger");

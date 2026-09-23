@@ -37,17 +37,16 @@ async function loadReports() {
         return;
     }
     const alerts = alertsResult.status === 404 ? [] : alertsResult.data;
-    // Datas REST são horários locais do backend, sem fuso no contrato.
-    if (alerts.some(alert => !/^\d{4}-\d{2}-\d{2} /.test(alert.data || "") || Number.isNaN(new Date(alert.data.replace(" ", "T")).getTime()))) {
+    // Datas REST são horários locais do backend serializados em HTTP-date;
+    // backendDayKey() as normaliza sem reinterpretar o fuso.
+    const days = alerts.map(alert => backendDayKey(alert?.data));
+    if (days.some(day => !day)) {
         showChartState("reportAlerts", "Datas dos alertas indisponíveis.");
         return;
     }
-    const end = new Date(); end.setHours(23, 59, 59, 999);
-    const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - 29);
-    const filtered = alerts.filter(alert => {
-        const date = new Date(alert.data.replace(" ", "T"));
-        return date >= start && date <= end;
-    });
+    const last = new Date(); const first = new Date(); first.setDate(first.getDate() - 29);
+    const start = localDayKey(first), end = localDayKey(last);
+    const filtered = alerts.filter((_, index) => days[index] >= start && days[index] <= end);
     const resolved = filtered.filter(alert => alert.resolvido === true).length;
     reportSummary = { total: filtered.length, resolved, rate: filtered.length ? `${(resolved / filtered.length * 100).toFixed(1)}%` : "—" };
     document.getElementById("reportTotal").textContent = reportSummary.total;
@@ -77,10 +76,6 @@ async function loadReports() {
         data: { labels: reportSectors.map(item => item[0]), datasets: [{ label: "Alertas", data: reportSectors.map(item => item[1]), backgroundColor: "#3155f5" }] },
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } } } }
     });
-}
-
-function csvEscape(value){
-    return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
 function exportReportsCsv(){

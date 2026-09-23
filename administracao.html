@@ -62,22 +62,29 @@
     <article class="card kpi"><i class="fa-solid fa-users"></i><h3>Usuários</h3><strong id="adminUsersCount">—</strong><p class="text-muted">Cadastrados</p></article>
     <article class="card kpi"><i class="fa-solid fa-user-shield"></i><h3>Administradores</h3><strong id="adminAdminsCount">—</strong><p class="text-muted">Acesso total</p></article>
     <article class="card kpi"><i class="fa-solid fa-key"></i><h3>Perfis</h3><strong id="adminProfilesCount">—</strong><p class="text-muted">De acesso</p></article>
-    <article class="card kpi"><i class="fa-solid fa-clock-rotate-left"></i><h3>Acessos</h3><strong id="adminLogsCount">—</strong><p class="text-muted">Logins registrados</p></article>
+    <article class="card kpi"><i class="fa-solid fa-clock-rotate-left"></i><h3>Acessos</h3><strong id="adminLogsCount">—</strong><p class="text-muted">Com acesso registrado</p></article>
 </div>
 
 <article class="card table-card">
     <div class="table-head">
-        <div><h2>Usuários e Permissões</h2><p class="text-muted">Edição e exclusão indisponíveis — aguardando atualização do servidor.</p></div>
-        <button class="btn secondary" id="refreshUsers" type="button" data-permission="users:list">Atualizar lista</button>
-        <button class="btn" id="openUserModal" type="button" data-permission="users:create"><i class="fa-solid fa-user-plus"></i>Novo usuário</button>
+        <div><h2>Usuários e Permissões</h2><p class="text-muted">Funcionários cadastrados e seus perfis de acesso.</p></div>
+        <div class="header-actions">
+            <button class="btn secondary" id="refreshUsers" type="button" data-permission="users:list">
+                <i class="fa-solid fa-rotate"></i>
+                Atualizar lista
+            </button>
+            <button class="btn" id="openUserModal" type="button" data-permission="users:create"><i class="fa-solid fa-user-plus"></i>Novo usuário</button>
+        </div>
     </div>
+
+    <p id="usersFeedback" class="text-muted table-feedback" role="status" aria-live="polite" hidden></p>
 
     <div class="table-wrap">
         <table>
             <thead>
-                <tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Unidade</th><th>Ações</th></tr>
+                <tr><th>Nome</th><th>E-mail</th><th>Perfil</th><th>Status</th><th>Unidade</th></tr>
             </thead>
-            <tbody id="usersTable" aria-live="polite" aria-busy="true"><tr><td colspan="6" class="empty">Carregando usuários...</td></tr></tbody>
+            <tbody id="usersTable" aria-busy="true"><tr><td colspan="5" class="empty">Carregando usuários...</td></tr></tbody>
         </table>
     </div>
 </article>

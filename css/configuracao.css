@@ -1,13 +1,6 @@
 .settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.registry-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 20px; }
-.registry-grid > section { min-width: 0; }
-.registry-grid form { display: grid; gap: 12px; margin: 18px 0; }
-.registry-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 0; border-bottom: 1px solid var(--border); }
-.registry-row strong { flex: 1 1 100px; overflow-wrap: anywhere; }
-.registry-row .btn { padding: 8px 10px; }
-@media (max-width: 900px) { .registry-grid { grid-template-columns: minmax(0, 1fr); } }
 .settings-grid > *, .vision-control, .vision-actions > * { min-width: 0; }
-.vision-settings, .registry-settings { grid-column: 1 / -1; }
+.vision-settings { grid-column: 1 / -1; }
 .vision-control { display: grid; gap: 12px; padding: 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-wrap: anywhere; }
 .vision-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .vision-actions .form-group { flex: 1 1 180px; max-width: 320px; }

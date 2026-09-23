@@ -8,12 +8,15 @@ const root = path.resolve(__dirname, '..');
 const passed = [], errors = [], calls = [];
 const check = name => { passed.push(name); console.log('PASS', name); };
 const fixture = [
-    { id: 1, nome: 'Ana <b>', sobrenome: 'Souza', email: 'ana@example.test', perfil: 'admin', admin: true, ativo: true, unidade: 'Unidade A', telefone: null },
-    { id: 2, nome: 'Bruno', sobrenome: null, email: 'bruno@example.test', perfil: 'supervisor', admin: false, ativo: false, unidade: null, telefone: null },
-    { id: 3, nome: 'Carla', sobrenome: 'Silva', email: 'carla@example.test', perfil: 'operador', admin: false, ativo: true, unidade: 'Unidade B', telefone: null }
+    { id: 1, nome: 'Ana <b>', sobrenome: 'Souza', email: 'ana@example.test', perfil: 'admin', admin: true, ativo: true, unidade: 'Unidade A', telefone: null, acesso: 'Tue, 22 Sep 2026 08:00:00 GMT' },
+    { id: 2, nome: 'Bruno', sobrenome: null, email: 'bruno@example.test', perfil: 'supervisor', admin: false, ativo: false, unidade: null, telefone: null, acesso: null },
+    { id: 3, nome: 'Carla', sobrenome: 'Silva', email: 'carla@example.test', perfil: 'operador', admin: false, ativo: true, unidade: 'Unidade B', telefone: null, acesso: 'Mon, 21 Sep 2026 17:30:00 GMT' }
 ];
 let role = 'admin', users = fixture, usersStatus = 200, toggleStatus = 200, signupStatus = 201;
 let usersGate = null, toggleGate = null, signupGate = null, invalidToggle = false;
+// Leituras de estado do contrato atual: GET /active-learning/status e GET /video/lote.
+let alStatus = 200, alEnabled = false, alBody = null, alGate = null;
+let batchStatus = 200, batchBody = { tamanho_lote: 4 };
 const gate = () => { let release; const promise = new Promise(resolve => { release = resolve; }); return { promise, release }; };
 
 (async () => {
@@ -27,6 +30,11 @@ const gate = () => { let release; const promise = new Promise(resolve => { relea
                 let data, status = 200;
                 if (url.pathname === '/session') data = { authenticated: true, user: { id: 10, nome: 'Sessão', perfil: role, admin: role === 'admin', ativo: true } };
                 else if (url.pathname === '/users') { data = users; status = usersStatus; if (usersGate) await usersGate.promise; }
+                else if (url.pathname === '/active-learning/status') {
+                    data = alBody === null ? { enabled: alEnabled } : alBody; status = alStatus;
+                    if (alGate) await alGate.promise;
+                }
+                else if (url.pathname === '/video/lote') { data = batchBody; status = batchStatus; }
                 else if (url.pathname === '/active-learning/toggle') {
                     data = { message: 'OK', enabled: request.postDataJSON().enabled }; status = toggleStatus;
                     if (toggleGate) await toggleGate.promise;
@@ -50,14 +58,32 @@ const gate = () => { let release; const promise = new Promise(resolve => { relea
         const waitUsers = () => page.waitForFunction(() => document.getElementById('usersTable').getAttribute('aria-busy') === 'false');
         const waitToggle = () => page.waitForFunction(() => document.getElementById('activeLearningActions').getAttribute('aria-busy') === 'false');
         const countCalls = endpoint => calls.filter(call => call.path === endpoint).length;
-        await visit('configuracao');
-        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: indisponível');
-        assert.equal(await page.locator('#workerBatchSize').inputValue(), '');
-        assert.equal(calls.filter(call => /active-learning|video\/lote/.test(call.path)).length, 0);
-        check('Estado inicial desconhecido: sem valor fictício, GET inventado ou POST automático');
+        const waitAL = text => page.waitForFunction(expected =>
+            document.getElementById('activeLearningState').textContent === expected, text);
+        const waitBatch = text => page.waitForFunction(expected =>
+            document.getElementById('workerBatchState').textContent === expected, text);
 
+        await visit('configuracao');
+        await waitAL('Estado atual: desativado');
+        await waitBatch('Valor atual: 4');
+        assert.equal(await page.locator('#workerBatchSize').inputValue(), '4');
+        assert.deepEqual(calls.filter(call => /active-learning|video\/lote/.test(call.path))
+            .map(call => `${call.method} ${call.path}`), ['GET /active-learning/status', 'GET /video/lote']);
+        check('Estado inicial vem das leituras reais do backend, sem POST automático');
+
+        alEnabled = true; await visit('configuracao');
+        await waitAL('Estado atual: ativado');
+        assert.equal(await page.locator('#activeLearningFeedback').innerText(), '');
+        alEnabled = false;
+        check('GET inicial com Active Learning ativo reflete o valor real');
+
+        let alReads = countCalls('/active-learning/status'), batchReads = countCalls('/video/lote');
         for (const currentRole of ['admin', 'supervisor', 'operador']) {
             role = currentRole; await visit('configuracao');
+            if (role !== 'operador') await waitAL('Estado atual: desativado');
+            assert.equal(countCalls('/active-learning/status'), alReads + (role === 'operador' ? 0 : 1));
+            assert.equal(countCalls('/video/lote'), batchReads + (role === 'admin' ? 1 : 0));
+            alReads = countCalls('/active-learning/status'); batchReads = countCalls('/video/lote');
             assert.equal(await page.locator('#enableActiveLearning').isDisabled(), role === 'operador');
             assert.equal(await page.locator('#disableActiveLearning').isDisabled(), role === 'operador');
             assert.equal(await page.evaluate(() => canPerform('vision:workers')), role === 'admin');
@@ -68,44 +94,111 @@ const gate = () => { let release; const promise = new Promise(resolve => { relea
                 assert.equal(countCalls('/active-learning/toggle'), before);
             } else {
                 await page.locator('#enableActiveLearning').click(); await waitToggle();
-                assert.equal(await page.locator('#activeLearningState').innerText(), 'Ativado nesta sessão');
+                assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: ativado');
             }
-            check('Permissões reais de Active Learning e workers: ' + role);
+            check('Permissões reais de leitura e alteração: ' + role);
         }
         role = 'admin'; await visit('configuracao');
+        await waitAL('Estado atual: desativado');
         toggleGate = gate();
         await page.locator('#enableActiveLearning').click();
         await page.waitForFunction(() => document.getElementById('enableActiveLearning').disabled);
-        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: indisponível');
+        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: desativado');
         const pendingCalls = countCalls('/active-learning/toggle');
         await page.evaluate(() => setActiveLearning(false));
         assert.equal(countCalls('/active-learning/toggle'), pendingCalls);
         toggleGate.release(); toggleGate = null; await waitToggle();
-        assert.equal(await page.locator('#activeLearningState').innerText(), 'Ativado nesta sessão');
+        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: ativado');
         assert.deepEqual(calls.filter(call => call.path === '/active-learning/toggle').at(-1).body, { enabled: true });
         check('Ativar só confirma após HTTP 200 e impede ações concorrentes');
         await page.locator('#disableActiveLearning').click(); await waitToggle();
-        assert.equal(await page.locator('#activeLearningState').innerText(), 'Desativado nesta sessão');
+        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: desativado');
         assert.deepEqual(calls.filter(call => call.path === '/active-learning/toggle').at(-1).body, { enabled: false });
         check('Desativar envia boolean false e confirma a resposta real');
         for (const status of [500, 403, 0]) {
             toggleStatus = status; await page.locator('#enableActiveLearning').click(); await waitToggle();
-            assert.equal(await page.locator('#activeLearningState').innerText(), 'Desativado nesta sessão');
+            assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: desativado');
             assert.match(await page.locator('#activeLearningFeedback').innerText(), status === 403 ? /permissão/ : status === 0 ? /conectar/ : /Não foi possível/);
             assert(!await page.locator('#enableActiveLearning').isDisabled());
             check('Active Learning preserva estado e permite retry: ' + status);
         }
         toggleStatus = 200; invalidToggle = true;
         await page.locator('#enableActiveLearning').click(); await waitToggle();
-        assert.equal(await page.locator('#activeLearningState').innerText(), 'Desativado nesta sessão');
+        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: desativado');
         invalidToggle = false;
         check('JSON inválido não confirma Active Learning');
-        await page.reload(); await page.evaluate(() => window.sessionReady);
-        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: indisponível');
+
+        for (const [status, body, expected] of [
+            [500, null, /consultar o estado atual/],
+            [403, { message: 'Acesso negado' }, /permissão/],
+            [0, null, /conectar/],
+            [200, { enabled: 'sim' }, /consultar o estado atual/],
+            [200, {}, /consultar o estado atual/]
+        ]) {
+            alStatus = status; alBody = body;
+            await page.reload(); await page.evaluate(() => window.sessionReady);
+            await page.waitForFunction(() => document.getElementById('activeLearningFeedback').textContent !== '');
+            assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: indisponível');
+            assert.match(await page.locator('#activeLearningFeedback').innerText(), expected);
+            assert(!await page.locator('#enableActiveLearning').isDisabled());
+            check('GET inicial sem resposta válida mantém estado desconhecido: ' + status + ' ' + JSON.stringify(body));
+        }
         toggleStatus = 500; await page.locator('#enableActiveLearning').click(); await waitToggle();
         assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: indisponível');
-        toggleStatus = 200;
-        check('Reload descarta confirmação da sessão e erro inicial preserva estado desconhecido');
+        toggleStatus = 200; alStatus = 200; alBody = null;
+        check('Falha na alteração após GET sem resposta válida preserva o estado desconhecido');
+
+        // Corrida: enquanto a leitura inicial não responde, nenhuma alteração parte.
+        alGate = gate();
+        await page.reload(); await page.evaluate(() => window.sessionReady);
+        await page.waitForFunction(() => document.getElementById('enableActiveLearning').disabled);
+        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: consultando...');
+        const beforeToggle = countCalls('/active-learning/toggle');
+        await page.evaluate(() => setActiveLearning(true));
+        assert.equal(countCalls('/active-learning/toggle'), beforeToggle);
+        alGate.release(); alGate = null;
+        await waitAL('Estado atual: desativado');
+        await page.locator('#enableActiveLearning').click(); await waitToggle();
+        await waitAL('Estado atual: ativado');
+        check('GET inicial em voo bloqueia a alteração e libera o toggle ao responder');
+
+        // Corrida inversa: o GET responde "ativado" depois de um toggle já confirmado.
+        alEnabled = true; alGate = gate();
+        await page.reload(); await page.evaluate(() => window.sessionReady);
+        await page.waitForFunction(() => document.getElementById('enableActiveLearning').disabled);
+        await page.evaluate(() => {
+            visionSettingsState.activeLearningLoading = false;
+            setActiveLearning(false);
+        });
+        await waitToggle();
+        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: desativado');
+        alGate.release(); alGate = null;
+        await page.waitForTimeout(200);
+        assert.equal(await page.locator('#activeLearningState').innerText(), 'Estado atual: desativado');
+        alEnabled = false;
+        check('Resposta atrasada do GET inicial não sobrescreve a alteração já confirmada');
+
+        for (const [status, body, expected, expectedInput] of [
+            [200, { tamanho_lote: 1 }, 'Valor atual: 1', '1'],
+            [503, { message: 'Nenhum worker ativo no momento.' }, 'Valor atual: nenhum worker ativo no momento.', ''],
+            [500, { message: 'Erro interno do servidor' }, 'Valor atual: indisponível', ''],
+            [403, { message: 'Acesso negado' }, 'Valor atual: indisponível', ''],
+            [0, null, 'Valor atual: servidor inacessível.', ''],
+            [200, { tamanho_lote: 0 }, 'Valor atual: indisponível', ''],
+            [200, { tamanho_lote: '2,5' }, 'Valor atual: indisponível', ''],
+            [200, {}, 'Valor atual: indisponível', '']
+        ]) {
+            batchStatus = status; batchBody = body;
+            await page.reload(); await page.evaluate(() => window.sessionReady);
+            await waitBatch(expected);
+            assert.equal(await page.locator('#workerBatchSize').inputValue(), expectedInput);
+            assert(await page.locator('#applyWorkerBatch').isDisabled());
+            assert(await page.locator('#workerBatchSize').isDisabled());
+            check('Leitura do lote atual: ' + status + ' ' + JSON.stringify(body));
+        }
+        batchStatus = 200; batchBody = { tamanho_lote: 4 };
+        await page.reload(); await page.evaluate(() => window.sessionReady);
+        await waitAL('Estado atual: desativado');
 
         assert.equal(await page.locator('#workerBatchSize').getAttribute('min'), '1');
         assert.equal(await page.locator('#workerBatchSize').getAttribute('step'), '1');
@@ -121,9 +214,9 @@ const gate = () => { let release; const promise = new Promise(resolve => { relea
             document.getElementById('applyWorkerBatch').disabled = false;
             document.getElementById('workerBatchForm').requestSubmit();
         });
-        assert.equal(calls.filter(call => call.path.startsWith('/video/lote')).length, 0);
-        assert.match(await page.locator('#workerBatchFeedback').innerText(), /aguardando atualização/);
-        check('Lote bloqueado na API e no submit mesmo após habilitação manual do DOM');
+        assert.equal(calls.filter(call => call.path.startsWith('/video/lote') && call.method !== 'GET').length, 0);
+        assert.match(await page.locator('#workerBatchFeedback').innerText(), /alteração do lote está indisponível nesta versão/);
+        check('Alteração do lote bloqueada na API e no submit mesmo após habilitação manual do DOM');
 
         // Somente neste sandbox de teste: comprova o caminho futuro sem liberar a aplicação.
         const futureCalls = [];
@@ -150,26 +243,67 @@ const gate = () => { let release; const promise = new Promise(resolve => { relea
         assert.equal(await page.locator('#usersTable tr').count(), 3);
         assert.match(await page.locator('#usersTable').innerText(), /Ana <b> Souza/);
         assert.equal(await page.locator('#usersTable b').count(), 0);
-        assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['3', '1', '3', '—']);
+        // A quarta métrica sai de `acesso`, que GET /users de fato devolve: 2 dos 3.
+        assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['3', '1', '3', '2']);
         assert.match(await page.locator('#usersTable').innerText(), /Inativo/);
         assert.equal(await page.locator('#usersTable button').count(), 0);
         assert.doesNotMatch(await page.locator('thead').innerText(), /Último acesso/);
-        check('GET /users: loading, campos reais, escape HTML, métricas derivadas e gestão indisponível');
+        // A coluna "Ações" e o aviso permanente de gestão indisponível saíram da tela.
+        assert.doesNotMatch(await page.locator('thead').innerText(), /Ações/);
+        assert.doesNotMatch(await page.locator('#usersTable').innerText(), /Indisponíveis/);
+        assert.doesNotMatch(await page.locator('body').innerText(), /aguardando atualização do servidor/);
+        // Atualizar lista fica no cabeçalho do card, junto de Novo usuário.
+        assert.equal(await page.locator('.table-head .header-actions #refreshUsers').count(), 1);
+        assert.equal(await page.locator('.table-head .header-actions #openUserModal').count(), 1);
+        check('GET /users: loading, campos reais, escape HTML, métricas reais e nenhuma gestão insegura na tela');
+
+        // ETAPA 3 — Atualizar lista: loading visível, sem disparo duplicado e sem
+        // nenhum controle de edição/exclusão de usuário na tela.
+        const antesDoRefresh = countCalls('/users');
+        usersGate = gate();
+        await page.locator('#refreshUsers').click();
+        await page.waitForFunction(() => document.getElementById('refreshUsers').disabled);
+        assert.equal(await page.locator('#usersTable').getAttribute('aria-busy'), 'true');
+        assert.match(await page.locator('#usersFeedback').innerText(), /Atualizando lista/);
+        // Enquanto a leitura está em voo, novos cliques não disparam outra requisição.
+        const duranteRefresh = countCalls('/users');
+        await page.locator('#refreshUsers').click({ force: true });
+        await page.locator('#refreshUsers').click({ force: true });
+        assert.equal(countCalls('/users'), duranteRefresh);
+        // A lista anterior continua na tela durante a atualização.
+        assert.match(await page.locator('#usersTable').innerText(), /Ana/);
+        usersGate.release(); usersGate = null; await waitUsers();
+        assert.equal(countCalls('/users'), antesDoRefresh + 1);
+        assert.equal(await page.locator('#refreshUsers').isDisabled(), false);
+        assert.equal(await page.locator('#usersTable').getAttribute('aria-busy'), 'false');
+        assert.equal(await page.locator('#usersFeedback').isVisible(), false);
+        check('Atualizar lista: loading, lista preservada durante a leitura e nenhum disparo duplicado');
+
+        // Nenhuma ação insegura de usuário é oferecida, nem mesmo desabilitada.
+        assert.equal(await page.locator('#usersTable button, #usersTable a, #usersTable [role="button"]').count(), 0);
+        assert.equal(await page.locator('[data-user-edit], [data-user-delete]').count(), 0);
+        const escritasDeUsuario = calls.filter(call =>
+            call.path.startsWith('/users') && call.method !== 'GET');
+        assert.deepEqual(escritasDeUsuario, []);
+        check('Administração não oferece edição/exclusão de usuário nem emite PUT/DELETE de usuários');
         await page.evaluate(() => localStorage.setItem('visaoepi_users', JSON.stringify([{ nome: 'Pessoa fictícia local' }])));
         users = []; await page.locator('#refreshUsers').click(); await waitUsers();
         assert.equal(await page.locator('#usersTable').innerText(), 'Nenhum usuário cadastrado.');
-        assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['0', '0', '0', '—']);
+        assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['0', '0', '0', '0']);
         assert.doesNotMatch(await page.locator('body').innerText(), /Pessoa fictícia local/);
         check('200 + [] é vazio real, com zeros derivados e sem usuários do localStorage');
+        // Com uma leitura real já na tela (0 usuários reais), a falha seguinte preserva
+        // o que foi lido e avisa; nunca inventa uma lista nem finge vazio.
         for (const status of [500, 403, 0]) {
             usersStatus = status; await page.locator('#refreshUsers').click(); await waitUsers();
-            assert.equal(await page.locator('#usersTable').innerText(), 'Não foi possível carregar os usuários.');
-            assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['—', '—', '—', '—']);
-            check('Listagem distingue erro de vazio: ' + status);
+            assert.equal(await page.locator('#usersTable').innerText(), 'Nenhum usuário cadastrado.');
+            assert.match(await page.locator('#usersFeedback').innerText(), /última leitura bem-sucedida/);
+            check('Falha de atualização preserva a leitura anterior e avisa: ' + status);
         }
         usersStatus = 200; users = { users: fixture }; await page.locator('#refreshUsers').click(); await waitUsers();
-        assert.match(await page.locator('#usersTable').innerText(), /Não foi possível/);
-        check('Formato incompatível de /users não vira lista vazia');
+        assert.match(await page.locator('#usersFeedback').innerText(), /última leitura bem-sucedida/);
+        assert.doesNotMatch(await page.locator('#usersTable').innerText(), /Ana/);
+        check('Formato incompatível de /users não vira lista vazia nem sobrescreve a leitura anterior');
         users = fixture; await page.locator('#refreshUsers').click(); await waitUsers();
 
         const fillSignup = async () => {
@@ -192,8 +326,10 @@ const gate = () => { let release; const promise = new Promise(resolve => { relea
         await page.locator('#userForm [type="submit"]').click();
         await page.waitForFunction(() => document.getElementById('toastContainer').textContent.includes('listagem não pôde ser atualizada'));
         assert(!await page.locator('#userModal').evaluate(el => el.classList.contains('active')));
-        assert.match(await page.locator('#usersTable').innerText(), /Não foi possível/);
-        check('Falha do refresh mantém signup bem-sucedido e informa listagem não atualizada');
+        // O signup deu certo; só a releitura falhou, então a lista anterior fica na tela.
+        assert.match(await page.locator('#usersTable').innerText(), /Ana/);
+        assert.match(await page.locator('#usersFeedback').innerText(), /última leitura bem-sucedida/);
+        check('Falha do refresh mantém signup bem-sucedido, preserva a lista e informa a falha');
         usersStatus = 200;
         for (const status of [400, 403, 0]) {
             await fillSignup(); signupStatus = status;
@@ -245,13 +381,16 @@ const gate = () => { let release; const promise = new Promise(resolve => { relea
             assert.equal(await page.evaluate(() => canPerform('users:list')), false);
             check('Administração não consulta /users sem permissão: ' + role);
         }
-        role = 'admin'; await visit('configuracao'); toggleStatus = 401;
+        role = 'admin'; await visit('configuracao');
+        await waitAL('Estado atual: desativado');
+        toggleStatus = 401;
         await page.locator('#enableActiveLearning').click(); await page.waitForURL('**/login.html');
         check('401 no Active Learning redireciona para login pela infraestrutura existente');
-        assert.equal(calls.filter(call => call.path.startsWith('/video/lote')).length, 0);
+        assert.equal(calls.filter(call => call.path.startsWith('/video/lote') && call.method !== 'GET').length, 0);
+        assert(calls.some(call => call.path === '/video/lote' && call.method === 'GET'));
         assert.equal(calls.filter(call => ['PUT', 'DELETE'].includes(call.method)).length, 0);
         assert.deepEqual(errors, []);
-        check('Nenhuma chamada ao lote quebrado, PUT/DELETE de usuários ou exceção JavaScript');
+        check('Lote somente lido, nenhuma alteração, PUT/DELETE de usuários ou exceção JavaScript');
         console.log(JSON.stringify({ passed: passed.length, pageErrors: errors, backend: 'simulado' }));
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

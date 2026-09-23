@@ -41,6 +41,13 @@ let alertData = [
     { id: 3, data: '2026-09-11 11:00:00', evento: 'queda', severidade: 2, resolvido: true },
     { id: 4, data: '2026-09-11 12:00:00', evento: 'desconhecido', severidade: 9, resolvido: false }
 ];
+let complianceCounts = { total_conformes: 8, total_nao_conformes: 2 };
+const TEST_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const backendDayKeyForTest = value => {
+    const http = /^[A-Za-z]{3},\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})/.exec(String(value || '').trim());
+    if (http) return `${http[3]}-${String(TEST_MONTHS.indexOf(http[2]) + 1).padStart(2, '0')}-${http[1].padStart(2, '0')}`;
+    return /^\d{4}-\d{2}-\d{2}/.exec(String(value || '').trim())?.[0] || '';
+};
 const check = (name) => { passed.push(name); console.log('PASS', name); };
 
 (async () => {
@@ -112,6 +119,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                     if (status !== 200) return route.fulfill({ status, body: '' });
                     return route.fulfill({ headers: { 'Cache-Control': 'no-store' }, contentType: 'image/svg+xml', body: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#306090"/><rect x="1" y="1" width="${width - 2}" height="${height - 2}" fill="none" stroke="white"/></svg>` });
                 }
+                else if (url.pathname === '/estatisticas/conformes') data = complianceCounts;
                 else if (url.pathname.startsWith('/alertas/estatisticas')) data = [];
                 else if (/\/alertas\/\d+\/resolvido/.test(url.pathname)) {
                     resolveRequests.push({ path: url.pathname, method: route.request().method(), body: route.request().postData() });
@@ -625,10 +633,13 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.locator('#alertsNext').click();
         await page.locator('#alertStatus').selectOption('Resolvido');
         await assertAlertPage(alertData.slice(103), '1–17 de 17', true, true);
-        await page.locator('#alertStatus').selectOption('Em análise');
+        // Só existem Pendente/Resolvido. Combinação real sem resultados preserva
+        // a cobertura de vazio, sem exigir um estado que a API não fornece.
+        await page.locator('#alertSeverity').selectOption('Crítico');
         await assertAlertPage([], '0 de 0', true, true);
         assert.match(await page.locator('#alertsTable').innerText(), /Nenhum alerta encontrado com os filtros selecionados/);
         await page.locator('#alertStatus').selectOption('');
+        await page.locator('#alertSeverity').selectOption('');
         // Os nomes cadastrados pertencem a um registro fora da primeira página.
         for (const term of ['  OCORRENCIA 120 ', 'expedicao de pecas', 'logistica', 'portao leste', 'usuario 120']) {
             await page.locator('#alertSearch').fill('');
@@ -749,7 +760,9 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.waitForFunction(() => document.getElementById('dashboardCamerasOnline').textContent === '1/3');
         assert.match(await page.locator('#dashboardEvents').innerText(), /Não informada[\s\S]*Médio[\s\S]*Crítico/);
         assert.equal(await page.locator('#dashboardEvents .badge.danger').innerText(), 'Crítico');
-        assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['—', '—', String(alertData.filter(alert => alert.data?.slice(0, 10) === new Date().toLocaleDateString('sv-SE')).length), '1/3']);
+        // Detecções avaliadas e taxa saem de GET /estatisticas/conformes (8 + 2).
+        await page.waitForFunction(() => document.getElementById('dashboardCompliance').textContent === '80,0%');
+        assert.deepEqual(await page.locator('.kpi strong').allTextContents(), ['10', '80,0%', String(alertData.filter(alert => backendDayKeyForTest(alert.data) === new Date().toLocaleDateString('sv-SE')).length), '1/3']);
         cameras = [];
         await page.evaluate(() => loadDashboardKpis());
         assert.equal(await page.locator('#dashboardCamerasOnline').innerText(), '0/0');
@@ -962,6 +975,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         cameraListData = [...cameras, { id: 2, nome: 'Câmera B', id_setor: 1 }];
         await page.evaluate(async () => {
             sessionStorage.clear();
+            apiClearCached('/cameras');
             await loadMapeamento();
         });
         await page.locator('#zoneCamera').selectOption('1');
@@ -1014,7 +1028,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.locator('#cancelZoneModal').click();
         // Restaura as câmeras da API para preservar as regressões anteriores.
         cameraListData = null;
-        await page.evaluate(async () => { sessionStorage.clear(); await loadMapeamento(); });
+        await page.evaluate(async () => { sessionStorage.clear(); apiClearCached('/cameras'); await loadMapeamento(); });
         check('Editor: HTTP 503, perda de conexão após seleção, bloqueio de cadastro e recuperação por Tentar novamente');
 
         await page.locator('#openZoneModal').click();
@@ -1107,7 +1121,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             renderSectorList({ status: 0 }, { data: [] });
             renderFactoryMap({ ok: true, status: 200, data: [] });
         });
-        assert.match(await page.locator('#sectorList').innerText(), /Backend indisponível/);
+        assert.match(await page.locator('#sectorList').innerText(), /Não foi possível carregar os setores/);
         assert.match(await page.locator('#factoryMap').innerText(), /Nenhuma câmera cadastrada/);
         assert.match(await page.locator('#factoryMap').evaluate(el => getComputedStyle(el).backgroundImage), /planta-fabrica\.png/);
         await page.evaluate(() => renderSectorList({ ok: true, status: 200, data: [] }, { data: [] }));
@@ -1128,28 +1142,41 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.goto('http://localhost:8765/mapeamento.html');
         await page.waitForFunction(() => document.querySelectorAll('#zoneCamera option').length === 3);
 
+        // A seleção de EPIs obrigatórios usa caixas de seleção, não mais <select multiple>.
+        const epiReady = () => page.waitForFunction(() =>
+            document.getElementById('zoneEpiOptions').getAttribute('aria-busy') === 'false');
+        const epiLabels = () => page.locator('#zoneEpiOptions .epi-option')
+            .evaluateAll(options => options.map(option => option.textContent.replace(/\s+/g, ' ').trim()));
+        const epiChecked = () => page.locator('#zoneEpiOptions input[name="ids_epis"]')
+            .evaluateAll(inputs => inputs.filter(input => input.checked).map(input => Number(input.value)).sort((a, b) => a - b));
+        const epiSelect = async values => {
+            for (const input of await page.locator('#zoneEpiOptions input[name="ids_epis"]').all()) {
+                const value = await input.getAttribute('value');
+                await input.setChecked(values.includes(value));
+            }
+        };
+
         await page.locator('#openZoneModal').click();
-        await page.waitForFunction(() => !document.getElementById('zoneEpi').disabled);
-        assert.deepEqual(await page.locator('#zoneEpi option').evaluateAll(options => options.map(option => option.textContent.trim())),
-            ['Capacete real — Cabeça', 'Luva <b>']);
-        assert.equal(await page.locator('#zoneEpi b').count(), 0);
-        assert.equal(await page.locator('#zoneEpi').inputValue(), '');
+        await epiReady();
+        assert.deepEqual(await epiLabels(), ['Capacete real Cabeça', 'Luva <b>']);
+        assert.equal(await page.locator('#zoneEpiOptions b').count(), 0);
+        assert.deepEqual(await epiChecked(), []);
+        assert.match(await page.locator('#zoneEpiSelectionSummary').innerText(), /Nenhum EPI obrigatório selecionado/);
         assert(await page.locator('#zoneEpiGroup').isVisible());
         assert.equal(await page.locator('#zoneEpiUnavailable').isVisible(), false);
         for (const [status, data, expectedOption, expectedHint] of [
-            [200, [], /Nenhum EPI cadastrado/, /Nenhum EPI cadastrado/],
-            [500, epiData, /EPIs indisponíveis/, /Não foi possível carregar/],
-            [0, epiData, /EPIs indisponíveis/, /Não foi possível carregar/]
+            [200, [], /Nenhum EPI cadastrado/, /Cadastre um EPI no inventário/],
+            [500, epiData, /Não foi possível carregar os EPIs/, /sem EPI obrigatório/],
+            [0, epiData, /Não foi possível carregar os EPIs/, /sem EPI obrigatório/]
         ]) {
             await page.locator('#cancelZoneModal').click();
             const previous = epiData;
             epiStatus = status; epiData = data;
             await page.locator('#openZoneModal').click();
-            await page.waitForFunction(() => document.getElementById('zoneEpi').disabled === true
-                && !document.getElementById('zoneEpi').textContent.includes('Carregando'));
-            assert.match(await page.locator('#zoneEpi').innerText(), expectedOption);
+            await epiReady();
+            assert.match(await page.locator('#zoneEpiOptions').innerText(), expectedOption);
             assert.match(await page.locator('#zoneEpiHint').innerText(), expectedHint);
-            assert.equal(await page.locator('#zoneEpi option').count(), 1);
+            assert.equal(await page.locator('#zoneEpiOptions .epi-option').count(), 0);
             epiData = previous;
         }
         epiStatus = 200;
@@ -1157,10 +1184,11 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         check('EPI obrigatório vem do cadastro real e distingue lista vazia, HTTP 500 e falha de rede, sem opções fixas');
 
         await page.locator('#openZoneModal').click();
-        await page.waitForFunction(() => !document.getElementById('zoneEpi').disabled);
+        await epiReady();
         await page.locator('#zoneCamera').selectOption('1');
         await page.locator('#zoneName').fill('Zona com EPI');
-        await page.locator('#zoneEpi').selectOption(['5', '6']);
+        await epiSelect(['5', '6']);
+        assert.match(await page.locator('#zoneEpiSelectionSummary').innerText(), /2 de 2 EPIs marcados/);
         await drawArea();
         const createdArea = await readArea();
         await page.locator('#saveZoneButton').click();
@@ -1170,7 +1198,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             x: createdArea.x, y: createdArea.y, largura: createdArea.width, altura: createdArea.height, ids_epis: [5, 6]
         } });
         await page.locator('#openZoneModal').click();
-        await page.waitForFunction(() => !document.getElementById('zoneEpi').disabled);
+        await epiReady();
         await page.locator('#zoneCamera').selectOption('1');
         await page.locator('#zoneName').fill('Zona sem EPI');
         await drawArea();
@@ -1180,7 +1208,44 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.deepEqual(zoneRequests.at(-1).body.ids_epis, []);
         check('Criação envia ids_epis numéricos, múltiplos ou lista vazia, sem id_epi legado');
 
-        zoneData = [{ id: 7, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, permitido: false }];
+        // ETAPA 3 — A seleção precisa funcionar por teclado e por toque, não só por
+        // Ctrl+clique como exigia o <select multiple>.
+        await page.locator('#openZoneModal').click();
+        await epiReady();
+        const primeiraCaixa = page.locator('#zoneEpiOptions input[name="ids_epis"]').first();
+        await primeiraCaixa.focus();
+        assert.equal(await page.evaluate(() => document.activeElement.name), 'ids_epis');
+        await page.keyboard.press('Space');
+        assert.deepEqual(await epiChecked(), [5]);
+        // Tab alcança a caixa seguinte e Espaço marca sem desmarcar a anterior.
+        await page.keyboard.press('Tab');
+        await page.keyboard.press('Space');
+        assert.deepEqual(await epiChecked(), [5, 6]);
+        await page.keyboard.press('Space');
+        assert.deepEqual(await epiChecked(), [5]);
+        assert.match(await page.locator('#zoneEpiSelectionSummary').innerText(), /1 de 2 EPIs marcados/);
+        check('EPIs da zona: marcar e desmarcar vários por teclado, sem Ctrl e sem perder a seleção anterior');
+
+        // Toque real no rótulo inteiro, não só no quadradinho.
+        const rotulo = page.locator('#zoneEpiOptions .epi-option').nth(1);
+        const caixaRotulo = await rotulo.boundingBox();
+        assert(caixaRotulo.height >= 40, 'alvo de toque menor que 40px');
+        const toque = { x: caixaRotulo.x + caixaRotulo.width / 2, y: caixaRotulo.y + caixaRotulo.height / 2 };
+        const touchCdp = await context.newCDPSession(page);
+        const tocar = async () => {
+            await touchCdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [toque] });
+            await touchCdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        };
+        await tocar();
+        assert.deepEqual(await epiChecked(), [5, 6]);
+        await tocar();
+        assert.deepEqual(await epiChecked(), [5]);
+        await touchCdp.detach();
+        await page.locator('#cancelZoneModal').click();
+        check('EPIs da zona: toque no rótulo alterna a seleção, com alvo de toque adequado');
+
+        // O backend atual devolve `epis_id: int[]` em toda leitura de zona.
+        zoneData = [{ id: 7, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, permitido: false, epis_id: [6, 5] }];
         await page.evaluate(() => loadRiskZones());
         await page.locator('[data-edit-zone="7"]').click();
         assert.equal(await page.locator('#zoneModalTitle').innerText(), 'Editar zona');
@@ -1188,13 +1253,14 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.equal(await page.locator('#zoneName').inputValue(), 'Prensa hidráulica');
         assert.equal(await page.locator('#zoneCamera').inputValue(), '1');
         assert.equal(await page.locator('#zoneAllowed').isChecked(), false);
-        assert.equal(await page.locator('#zoneEpiGroup').isVisible(), false);
-        assert(await page.locator('#zoneEpiUnavailable').isVisible());
-        assert.match(await page.locator('#zoneEpiUnavailable').innerText(), /associações atuais serão preservadas/);
+        await epiReady();
+        assert(await page.locator('#zoneEpiGroup').isVisible());
+        assert.equal(await page.locator('#zoneEpiUnavailable').isVisible(), false);
+        assert.deepEqual(await epiChecked(), [5, 6]);
         await area.waitFor({ state: 'visible' });
         await assertArea({ x: 0.1, y: 0.2, width: 0.3, height: 0.25 });
         assert.match(await page.locator('#zoneAreaStatus').innerText(), /Área atual da zona/);
-        check('Edição carrega os dados reais da zona, mostra a área persistida sobre o frame e declara o EPI indisponível');
+        check('Edição lê os IDs reais em epis_id e pré-seleciona os EPIs associados sobre a área persistida');
 
         for (const status of [400, 0]) {
             updateZoneStatus = status;
@@ -1204,7 +1270,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             assert.equal(zoneRequests.length, before + 1);
             assert.equal(zoneRequests.at(-1).method, 'PUT');
             assert.equal(zoneRequests.at(-1).path, '/zonas/7');
-            assert.deepEqual(zoneRequests.at(-1).body, { id_camera: 1, nome: 'Prensa hidráulica', permitido: false, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25 });
+            assert.deepEqual(zoneRequests.at(-1).body, { id_camera: 1, nome: 'Prensa hidráulica', permitido: false, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, ids_epis: [5, 6] });
             assert(await page.locator('#zoneModal').isVisible());
             assert.equal(await page.locator('#zoneName').inputValue(), 'Prensa hidráulica');
             assert.match(await page.locator('#riskZonesList').innerText(), /Prensa hidráulica/);
@@ -1220,7 +1286,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active')
             && document.getElementById('riskZonesList').textContent.includes('Prensa revisada'));
         assert.deepEqual(zoneRequests.at(-1), { method: 'PUT', path: '/zonas/7', body: {
-            id_camera: 1, nome: 'Prensa revisada', permitido: true,
+            id_camera: 1, nome: 'Prensa revisada', permitido: true, ids_epis: [5, 6],
             x: editedArea.x, y: editedArea.y, largura: editedArea.width, altura: editedArea.height
         } });
         assert.equal('id_epi' in zoneRequests.at(-1).body, false);
@@ -1230,7 +1296,84 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.equal(await page.locator('#zoneName').inputValue(), '');
         assert(await page.locator('#zoneEpiGroup').isVisible());
         await page.locator('#cancelZoneModal').click();
-        check('Redesenho envia a nova área normalizada, nunca id_epi no PUT, atualiza a lista e volta ao modo de criação');
+        check('Redesenho envia a nova área normalizada e os IDs reais em ids_epis, nunca id_epi, e volta ao modo de criação');
+
+        // A pré-seleção termina quando `zoneEpisReady` fecha ou quando o modal declara
+        // que as associações atuais serão preservadas. Esperar só pelo select habilitado
+        // observaria um estado intermediário.
+        const openZoneEdit = async (fixture = { epis_id: [5, 6] }) => {
+            zoneData = [{ id: 7, nome: 'Prensa revisada', id_camera: 1, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, permitido: true, ...fixture }];
+            await page.evaluate(() => loadRiskZones());
+            await page.locator('[data-edit-zone="7"]').click();
+            await page.waitForFunction(() => zoneEpisReady === true
+                || document.getElementById('zoneEpiUnavailable').hidden === false);
+        };
+        const saveZone = async () => {
+            await page.locator('#saveZoneButton').click();
+            await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active'));
+        };
+
+        // Alteração da seleção: o PUT substitui a lista, inclusive esvaziando-a.
+        await openZoneEdit();
+        assert(await page.locator('#zoneEpiGroup').isVisible());
+        await epiSelect(['6']);
+        await saveZone();
+        assert.deepEqual(zoneRequests.at(-1).body.ids_epis, [6]);
+
+        await openZoneEdit({ epis_id: [6] });
+        assert.deepEqual(await epiChecked(), [6]);
+        await epiSelect([]);
+        assert.match(await page.locator('#zoneEpiSelectionSummary').innerText(), /Nenhum EPI obrigatório selecionado/);
+        await saveZone();
+        assert.deepEqual(zoneRequests.at(-1).body.ids_epis, []);
+        check('Edição substitui a lista de EPIs, inclusive por lista vazia, quando a seleção real está na tela');
+
+        // Sem IDs confiáveis, o PUT omite ids_epis e o backend preserva as associações.
+        for (const [fixture, label] of [
+            [{}, 'campo epis_id ausente na resposta'],
+            [{ epis_id: null }, 'epis_id nulo'],
+            [{ epis_id: ['capacete'] }, 'epis_id fora do formato de IDs'],
+            [{ epis_id: [5, 99] }, 'ID associado que não existe no cadastro de EPIs']
+        ]) {
+            await openZoneEdit(fixture);
+            assert.equal(await page.locator('#zoneEpiGroup').isVisible(), false);
+            assert(await page.locator('#zoneEpiUnavailable').isVisible());
+            assert.match(await page.locator('#zoneEpiUnavailable').innerText(), /ficam como estão ao salvar/);
+            await saveZone();
+            assert.equal(zoneRequests.at(-1).method, 'PUT');
+            assert.equal('ids_epis' in zoneRequests.at(-1).body, false);
+            check('Edição não apaga associações: ' + label);
+        }
+
+        // Cadastro de EPIs indisponível não pode transformar [5, 6] em [].
+        for (const [status, data, label] of [
+            [500, epiData, 'HTTP 500 em /epis'],
+            [0, epiData, 'falha de rede em /epis'],
+            [200, [], 'cadastro de EPIs vazio']
+        ]) {
+            const previous = epiData;
+            epiStatus = status; epiData = data;
+            await openZoneEdit();
+            assert.equal(await page.locator('#zoneEpiGroup').isVisible(), false);
+            await saveZone();
+            assert.equal('ids_epis' in zoneRequests.at(-1).body, false);
+            epiStatus = 200; epiData = previous;
+            check('Cadastro de EPIs indisponível omite ids_epis em vez de esvaziá-lo: ' + label);
+        }
+
+        // Formato alternativo de agregado: objetos com id em vez de inteiros puros.
+        await openZoneEdit({ epis_id: [{ id: 5 }, { id: 6 }] });
+        assert.deepEqual(await epiChecked(), [5, 6]);
+        await page.locator('#cancelZoneModal').click();
+        check('Agregado de EPIs em objetos com id é lido como os mesmos IDs reais');
+
+        // Voltar ao modo de criação não pode herdar a seleção da zona editada.
+        await page.locator('#openZoneModal').click();
+        await page.waitForFunction(() => zoneEpisReady === true);
+        assert.deepEqual(await epiChecked(), []);
+        assert(await page.locator('#zoneEpiGroup').isVisible());
+        await page.locator('#cancelZoneModal').click();
+        check('Criação após edição abre sem seleção herdada');
 
         for (const width of [1440, 768, 390]) {
             await page.setViewportSize({ width, height: 1000 });
@@ -1262,7 +1405,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.equal(await page.locator('#cameraRotation').inputValue(), '0');
         assert.equal(await page.locator('#cameraMirrorH').isChecked(), false);
         assert.equal(await page.locator('#cameraMirrorV').isChecked(), false);
-        assert.match(await page.locator('#cameraTransformNote').innerText(), /não informa a rotação e o espelhamento atuais/);
+        assert.match(await page.locator('#cameraTransformNote').innerText(), /Não foi possível confirmar a rotação e o espelhamento atuais/);
         assert.doesNotMatch(await page.locator('#cameraList').innerHTML(), /10\.20\.30\.42/);
         assert.doesNotMatch(await page.locator('#cameraSelect').innerHTML(), /10\.20\.30\.42/);
         check('Editor de câmera carrega nome/IP/setor reais, oferece só as rotações do DTO e não fabrica rotação/espelhamento');
@@ -1310,7 +1453,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.equal(await page.locator('#cameraRotation').inputValue(), '270');
         assert(await page.locator('#cameraMirrorH').isChecked());
         assert.equal(await page.locator('#cameraMirrorV').isChecked(), false);
-        assert.match(await page.locator('#cameraTransformNote').innerText(), /confirmados pelo backend/);
+        assert.match(await page.locator('#cameraTransformNote').innerText(), /atuais da câmera/);
         assert.equal(await page.locator('#cameraName').inputValue(), 'Saída revisada');
         check('PUT aceito envia tipos exatos, invalida o cache, atualiza nome/setor, preserva a câmera e o stream e reapresenta a transformação confirmada');
 
@@ -1329,6 +1472,58 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.locator('#cancelCameraModal').click();
         assert.equal(await page.locator('#cameraModal').isVisible(), false);
         check('Modal de edição de câmera cabe e permanece legível em 1440/768/390 nos dois temas');
+
+        // ETAPA 2 - Editar camera e contextual: segue a camera selecionada e o
+        // Monitoramento nao ganha listagem nem CRUD de cameras/setores.
+        for (const id of ['openCameraCreateModal', 'openSectorModal', 'cameraCreateForm', 'sectorForm', 'registryPanel', 'loadRegistries']) {
+            assert.equal(await page.locator('#' + id).count(), 0, id);
+        }
+        assert.equal(await page.locator('[data-registry-delete], [data-sector-edit], [data-sector-delete]').count(), 0);
+        assert.equal(await page.locator('#openCameraModal').count(), 1);
+
+        await page.locator('#cameraSelect').selectOption('1');
+        await page.waitForFunction(() => currentCameraId === 1);
+        await page.locator('#openCameraModal').click();
+        assert.equal(await page.locator('#cameraName').inputValue(), 'Entrada');
+        assert.equal(await page.locator('#cameraIp').inputValue(), 'rtsp://camera_user:camera_password@10.20.30.41:554/stream');
+        assert.equal(await page.locator('#cameraSector').inputValue(), '1');
+        // A transformacao confirmada da camera 2 nao vaza para a camera 1.
+        assert.equal(await page.locator('#cameraRotation').inputValue(), '0');
+        assert.equal(await page.locator('#cameraMirrorH').isChecked(), false);
+        assert.equal(await page.locator('#cameraMirrorV').isChecked(), false);
+        check('Editar camera acompanha a camera selecionada e o Monitoramento nao vira CRUD de cameras');
+
+        updateCameraStatus = 200;
+        cameraListData = [{ id: 1, nome: 'Entrada revisada', id_setor: 2, ip: 'rtsp://10.20.30.41:554/stream', rotacao: 90, espelhar_horizontal: false, espelhar_vertical: true }, cameraListData[1]];
+        await page.locator('#cameraName').fill('Entrada revisada');
+        await page.locator('#cameraIp').fill('rtsp://10.20.30.41:554/stream');
+        await page.locator('#cameraSector').selectOption('2');
+        await page.locator('#cameraRotation').selectOption('90');
+        await page.locator('#cameraMirrorV').check();
+        await page.locator('#saveCameraButton').click();
+        await page.waitForFunction(() => !document.getElementById('cameraModal').classList.contains('active'));
+        assert.equal(cameraRequests.at(-1).path, '/cameras/1');
+        assert.deepEqual(cameraRequests.at(-1).body, {
+            nome: 'Entrada revisada', ip: 'rtsp://10.20.30.41:554/stream', id_setor: 2,
+            rotacao: 90, espelhar_horizontal: false, espelhar_vertical: true
+        });
+        // O rotulo do select e da lista vem do setor real, nao do nome enviado.
+        await page.waitForFunction(() => document.querySelector('#cameraSelect option[value="1"]').textContent.includes('Expedicao')
+            || document.querySelector('#cameraSelect option[value="1"]').textContent.includes('Expedição'));
+        assert.equal(await page.locator('[data-camera-id="1"] small').innerText(), 'Expedição');
+        assert.equal(await page.evaluate(() => currentCameraId), 1);
+        // O modal reapresenta a transformacao confirmada pelo backend para esta camera.
+        await page.locator('#openCameraModal').click();
+        assert.equal(await page.locator('#cameraRotation').inputValue(), '90');
+        assert.equal(await page.locator('#cameraMirrorH').isChecked(), false);
+        assert(await page.locator('#cameraMirrorV').isChecked());
+        await page.locator('#cancelCameraModal').click();
+        // Salvar nao pode duplicar o stream, o container nem os listeners de midia.
+        assert.equal(await page.locator('#videoStream').count(), 1);
+        assert.equal(await page.locator('#videoContainer img').count(), 1);
+        assert.equal(await page.locator('#videoContainer svg').count(), await page.locator('#videoContainer svg').count());
+        assert(await page.locator('#videoContainer svg').count() <= 1);
+        check('Salvar a camera selecionada atualiza a lista sem duplicar stream, container ou overlay');
 
         for (const [perfil, admin, allowed] of [['operador', false, false], ['supervisor', false, true], ['admin', true, true]]) {
             sessionUser = { id: 1, nome: 'Teste', perfil, admin, ativo: true };

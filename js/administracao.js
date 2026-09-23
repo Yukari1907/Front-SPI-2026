@@ -1,24 +1,46 @@
 
 "use strict";
 
-// Listagem e cadastro reais. Edição/exclusão aguardam contratos seguros.
+/**
+ * administracao.js — Listagem e cadastro reais de usuários.
+ *
+ * GET /users (@perfil_required admin) devolve id, nome, sobrenome, email, perfil,
+ * unidade, telefone, admin, ativo e acesso.
+ *
+ * Edição e exclusão continuam fora da tela porque o contrato atual não é seguro:
+ * PUT /users exige `senha` em texto puro e a grava sem hash, destruindo o bcrypt e
+ * o login do usuário, além de zerar `acesso`; DELETE /users/{id} chama um método
+ * que não existe no repositório. Preferimos não oferecer a ação a oferecer um
+ * botão inerte: ver ETAPA3_CORRECOES_FUNCIONAIS_UI.md.
+ */
 const $ = id => document.getElementById(id);
 let usersRequestId = 0;
 let signupPending = false;
+// true depois que uma leitura real já pintou a tabela: uma falha de atualização
+// posterior preserva essa lista em vez de esvaziar a tela.
+let usersRendered = false;
 
 function resetUserMetrics() {
     ["adminUsersCount", "adminAdminsCount", "adminProfilesCount", "adminLogsCount"].forEach(id => $(id).textContent = "—");
 }
 
 function showUsersState(message) {
-    $("usersTable").innerHTML = `<tr><td colspan="6" class="empty">${escapeHtml(message)}</td></tr>`;
+    $("usersTable").innerHTML = `<tr><td colspan="5" class="empty">${escapeHtml(message)}</td></tr>`;
+}
+
+function setUsersFeedback(message) {
+    const feedback = $("usersFeedback");
+    if (!feedback) return;
+    feedback.textContent = message;
+    feedback.hidden = !message;
 }
 
 function renderUsers(users) {
     $("adminUsersCount").textContent = users.length;
     $("adminAdminsCount").textContent = users.filter(user => user.admin === true || ["admin", "administrador"].includes(String(user.perfil || "").trim().toLowerCase())).length;
     $("adminProfilesCount").textContent = new Set(users.map(user => String(user.perfil || "").trim().toLowerCase()).filter(Boolean)).size;
-    $("adminLogsCount").textContent = "—"; // GET /users não retorna acessos.
+    // `acesso` é o último login gravado; só contamos quem realmente tem um.
+    $("adminLogsCount").textContent = users.filter(user => Boolean(user.acesso)).length;
     if (!users.length) {
         showUsersState("Nenhum usuário cadastrado.");
         return;
@@ -28,28 +50,52 @@ function renderUsers(users) {
         const name = [user.nome, user.sobrenome].filter(Boolean).join(" ") || "—";
         const role = roles[String(user.perfil || "").trim().toLowerCase()] || user.perfil || "—";
         const status = user.ativo === true ? "Ativo" : user.ativo === false ? "Inativo" : "—";
-        return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(user.email || "—")}</td><td>${escapeHtml(role)}</td><td>${status}</td><td>${escapeHtml(user.unidade || "—")}</td><td><span class="text-muted" title="Edição e exclusão aguardam atualização do servidor">Indisponíveis</span></td></tr>`;
+        return `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(user.email || "—")}</td><td>${escapeHtml(role)}</td><td>${status}</td><td>${escapeHtml(user.unidade || "—")}</td></tr>`;
     }).join("");
 }
 
+/**
+ * Recarrega a lista real. Uma falha nunca inventa usuários nem apaga a lista já
+ * exibida: quando já há dados na tela, eles permanecem e o erro vai para o aviso.
+ * @returns {Promise<boolean>} true somente quando o backend confirmou a leitura.
+ */
 async function loadUsers() {
     if (!canPerform("users:list")) return false;
     const requestId = ++usersRequestId;
     $("refreshUsers").disabled = true;
     $("usersTable").setAttribute("aria-busy", "true");
-    resetUserMetrics();
-    showUsersState("Carregando usuários...");
+    setUsersFeedback(usersRendered ? "Atualizando lista..." : "");
+    if (!usersRendered) {
+        resetUserMetrics();
+        showUsersState("Carregando usuários...");
+    }
     try {
         const result = await apiGet("/users");
         if (requestId !== usersRequestId) return false;
         if (!result.ok || !Array.isArray(result.data) || !result.data.every(user => user && typeof user === "object" && !Array.isArray(user))) {
-            showUsersState("Não foi possível carregar os usuários.");
+            const message = mutationError(result, "Não foi possível carregar os usuários.");
+            if (usersRendered) {
+                setUsersFeedback(`${message} Os dados abaixo são os da última leitura bem-sucedida.`);
+            } else {
+                resetUserMetrics();
+                showUsersState("Não foi possível carregar os usuários.");
+                setUsersFeedback("");
+            }
             return false;
         }
         renderUsers(result.data);
+        usersRendered = true;
+        setUsersFeedback("");
         return true;
     } catch {
-        if (requestId === usersRequestId) showUsersState("Não foi possível carregar os usuários.");
+        if (requestId === usersRequestId) {
+            if (usersRendered) {
+                setUsersFeedback("Não foi possível atualizar a lista. Os dados abaixo são os da última leitura bem-sucedida.");
+            } else {
+                resetUserMetrics();
+                showUsersState("Não foi possível carregar os usuários.");
+            }
+        }
         return false;
     } finally {
         if (requestId === usersRequestId) {
@@ -139,7 +185,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 });
 
                 if (result.status === 0) {
-                    showToast("Backend indisponível. Usuário não cadastrado.", "danger");
+                    showToast("Não foi possível conectar ao servidor. Usuário não cadastrado.", "danger");
                     return;
                 }
 
