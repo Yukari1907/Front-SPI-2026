@@ -1,0 +1,13 @@
+.settings-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.settings-grid > *, .vision-control, .vision-actions > * { min-width: 0; }
+.vision-settings { grid-column: 1 / -1; }
+.vision-control { display: grid; gap: 12px; padding: 20px 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; overflow-wrap: anywhere; }
+.vision-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.vision-actions .form-group { flex: 1 1 180px; max-width: 320px; }
+.vision-actions input { width: 100%; }
+.vision-control .btn:disabled { cursor: not-allowed; opacity: .65; }
+@media (max-width: 600px) {
+    .settings-grid { grid-template-columns: minmax(0, 1fr); }
+    .vision-actions .form-group { max-width: none; flex-basis: 100%; }
+    .vision-actions .btn { flex: 1; }
+}

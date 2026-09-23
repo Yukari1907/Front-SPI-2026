@@ -21,8 +21,9 @@ function getRolePermissions(role = getCurrentRole()) {
     return {
         pages: admin ? [...READ_PAGES, "admin"] : READ_PAGES,
         actions: ["alerts:view", "alerts:manage", "inventory:export",
-            ...(manager ? ["inventory:create", "inventory:edit", "inventory:delete", "cameras:edit"] : []),
-            ...(admin ? ["users:create"] : [])]
+            ...(manager ? ["inventory:create", "inventory:edit", "inventory:delete", "cameras:edit", "cameras:create", "cameras:delete", "sectors:manage"] : []),
+            ...(manager ? ["vision:active-learning"] : []),
+            ...(admin ? ["users:create", "users:list", "vision:workers"] : [])]
     };
 }
 
@@ -32,6 +33,69 @@ function canAccessPage(page,role=getCurrentRole()){
 
 function canPerform(action,role=getCurrentRole()){
     return getRolePermissions(role).actions.includes(action);
+}
+
+// ─────────────────────────────────────────────
+// Datas vindas do backend
+// ─────────────────────────────────────────────
+//
+// O repositório atual formata alertas como "AAAA-MM-DD HH:mm:ss", sem fuso.
+// Mantemos também suporte a HTTP-date para respostas legadas e campos datetime
+// serializados pelo Flask. Preservamos os componentes literais: o contrato de
+// alertas não declara UTC. Não inferir fuso a partir de um relatório histórico.
+const BACKEND_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const HTTP_DATE_PATTERN = /^[A-Za-z]{3},\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+(\d{2}):(\d{2}):(\d{2})/;
+
+/**
+ * Carimbo ordenável "AAAA-MM-DDTHH:mm:ss" a partir de uma data do backend,
+ * aceitando tanto HTTP-date quanto ISO 8601. Devolve "" quando não reconhece o
+ * valor — um formato desconhecido nunca vira uma data plausível.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function backendTimestampKey(value) {
+    if (typeof value !== "string") return "";
+
+    const httpDate = HTTP_DATE_PATTERN.exec(value.trim());
+    if (httpDate) {
+        const [, day, month, year, hour, minute, second] = httpDate;
+        const monthIndex = BACKEND_MONTHS.indexOf(month);
+        if (monthIndex === -1) return "";
+        return `${year}-${String(monthIndex + 1).padStart(2, "0")}-${day.padStart(2, "0")}T${hour}:${minute}:${second}`;
+    }
+
+    const iso = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/.exec(value.trim());
+    if (iso) return `${iso[1]}T${iso[2]}`;
+
+    const isoDay = /^(\d{4}-\d{2}-\d{2})$/.exec(value.trim());
+    return isoDay ? `${isoDay[1]}T00:00:00` : "";
+}
+
+/**
+ * Dia "AAAA-MM-DD" de uma data do backend, ou "" quando indeterminado.
+ * @param {unknown} value
+ * @returns {string}
+ */
+function backendDayKey(value) {
+    return backendTimestampKey(value).slice(0, 10);
+}
+
+/**
+ * Dia de hoje no fuso local, no mesmo formato de backendDayKey().
+ * @returns {string}
+ */
+function localDayKey(date = new Date()) {
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function mutationError(result, fallback) {
+    if (result.status === 401) return "Sessão expirada. Entre novamente.";
+    if (result.status === 403) return "Seu perfil não possui permissão para esta ação.";
+    if (result.status === 404) return "Registro não encontrado. Atualize a lista.";
+    if (result.status === 409) return "O registro possui vínculos que impedem esta alteração.";
+    if (result.status === 0 || result.status === -1) return "Não foi possível conectar ao servidor. Tente novamente.";
+    if (result.status >= 500) return "O servidor não confirmou a operação. Atualize a lista antes de tentar novamente.";
+    return result.data?.error || result.data?.message || fallback;
 }
 
 // Estado explícito para gráficos sem dados ou sem biblioteca disponível.
@@ -57,6 +121,16 @@ function escapeHtml(value){
         .replaceAll(">","&gt;")
         .replaceAll('"',"&quot;")
         .replaceAll("'","&#039;");
+}
+
+// Aspas CSV escapam delimitadores, mas não impedem interpretação como fórmula
+// pela planilha. Campos textuais potencialmente executáveis recebem apóstrofo.
+function csvEscape(value) {
+    let text = String(value ?? "");
+    if (typeof value === "string" && (/^\s*[=+\-@]/.test(text) || /^[\t\r\n]/.test(text))) {
+        text = "'" + text;
+    }
+    return `"${text.replaceAll('"', '""')}"`;
 }
 
 function initials(name){
@@ -372,10 +446,10 @@ const GLOBAL_SEARCH_ITEMS = [
     {
         page: "ppe",
         title: "Controle de EPIs",
-        description: "Colaboradores, entregas e conformidade",
+        description: "Detecções avaliadas e conformidade de EPIs",
         href: "controle-de-epis.html",
         icon: "fa-helmet-safety",
-        keywords: ["controle", "epis", "colaboradores", "entregas"]
+        keywords: ["controle", "epis", "detecções", "conformidade"]
     },
     {
         page: "mapping",
@@ -634,3 +708,6 @@ window.canAccessPage=canAccessPage;
 window.canPerform=canPerform;
 window.getCurrentRole=getCurrentRole;
 window.applyRolePermissions=applyRolePermissions;
+window.backendTimestampKey=backendTimestampKey;
+window.backendDayKey=backendDayKey;
+window.localDayKey=localDayKey;

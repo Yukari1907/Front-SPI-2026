@@ -76,3 +76,69 @@
     #zoneModal .modal-grid{grid-template-columns:minmax(0,1fr)}
     #zoneModal .modal-footer{flex-wrap:wrap}
 }
+
+/* Linha de setor com as ações de gestão (admin/supervisor). */
+.registry-row{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:12px 0;
+    border-bottom:1px solid var(--border);
+}
+.registry-row > span:first-child{flex:1 1 120px;overflow-wrap:anywhere}
+.registry-row .btn{padding:8px 10px}
+
+#sectorModal .modal-box,#cameraCreateModal .modal-box{max-width:100%}
+#sectorModal .page-title,#cameraCreateModal .page-title{padding-right:36px}
+#sectorModal button:disabled,#cameraCreateModal button:disabled{opacity:.6;cursor:default}
+@media(max-width:480px){
+    #sectorModal,#cameraCreateModal{padding:10px}
+    #sectorModal .modal-box,#cameraCreateModal .modal-box{padding:18px;max-height:94vh;max-height:94dvh}
+    #cameraCreateModal .modal-grid{grid-template-columns:minmax(0,1fr)}
+    #sectorModal .modal-footer,#cameraCreateModal .modal-footer{flex-wrap:wrap}
+}
+
+/* Seleção múltipla de EPIs obrigatórios da zona: caixas de seleção em vez de um
+   <select multiple>, para que dar e tirar vários EPIs seja óbvio no toque e no teclado. */
+.epi-picker{border:1px solid var(--border);border-radius:11px;padding:14px;min-width:0}
+.epi-picker legend{padding:0 6px;font-size:13px;font-weight:600;color:var(--text)}
+.epi-picker-hint{font-size:12px;margin-bottom:10px}
+.epi-picker-summary{font-size:12px;margin-top:10px}
+.epi-picker-summary:empty{display:none}
+
+.epi-picker-options{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+    gap:8px;
+    max-height:210px;
+    overflow-y:auto;
+}
+
+.epi-option{
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    padding:10px 12px;
+    border:1px solid var(--border);
+    border-radius:10px;
+    background:var(--surface);
+    cursor:pointer;
+    min-height:44px;
+}
+
+.epi-option:hover{border-color:var(--primary)}
+.epi-option input{margin-top:2px;width:18px;height:18px;flex:none;accent-color:var(--primary)}
+.epi-option:focus-within{outline:2px solid var(--primary);outline-offset:2px}
+
+/* Estado marcado evidente sem depender só da caixa. */
+.epi-option:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
+
+.epi-option-text{display:flex;flex-direction:column;gap:2px;min-width:0}
+.epi-option-name{font-size:13px;overflow-wrap:anywhere}
+.epi-option-category{font-size:11px;color:var(--muted);overflow-wrap:anywhere}
+
+@media(max-width:480px){
+    .epi-picker-options{grid-template-columns:minmax(0,1fr);max-height:240px}
+}

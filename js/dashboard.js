@@ -2,58 +2,145 @@
 "use strict";
 
 /**
- * dashboard.js — Dashboard com alertas recentes reais do backend.
+ * dashboard.js — Visão geral com dados reais do backend.
  *
- * API utilizada:
- *   GET /alertas → lista alertas (usa os 3 mais recentes para o dashboard)
+ * Cada indicador e o endpoint de onde ele sai:
+ *   Detecções avaliadas → GET /estatisticas/conformes → total_conformes + total_nao_conformes
+ *   Conformidade EPI     → GET /estatisticas/conformes → conformes / (conformes + não conformes)
+ *   Alertas hoje         → GET /alertas (histórico completo, filtrado pelo dia localmente)
+ *   Câmeras online       → GET /cameras/status → itens com status "Ativo"
+ *   Alertas por EPI      → GET /alertas/estatisticas/epi
+ *   Alertas por dia      → GET /alertas/estatisticas/periodo (padrão de 30 dias do backend)
+ *   Alertas recentes     → GET /alertas (3 mais recentes)
  *
- * Estatísticas e status usam as rotas documentadas em CONTRATO_INTEGRACAO.md.
+ * /estatisticas/conformes não aceita filtro algum: é a soma histórica global, e os
+ * dois cards declaram "Total acumulado" em vez de sugerir recorte de período.
+ *
+ * Carregando, zero real, vazio e erro são estados distintos: zero aparece como 0 e
+ * nenhuma falha de leitura vira zero.
  */
 
 function formatTime(dateStr) {
-    if (!dateStr) return "—";
-    const date = new Date(dateStr);
-    if (Number.isNaN(date.getTime())) return "—";
-    return new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" }).format(date);
+    // Hora tal como o servidor registrou: o sufixo "GMT" do HTTP-date não
+    // corresponde ao horário local ingênuo gravado, e converter deslocaria o valor.
+    const key = backendTimestampKey(dateStr);
+    return key ? key.slice(11, 16) : "—";
+}
+
+function setKpi(valueId, stateId, value, state) {
+    const valueElement = document.getElementById(valueId);
+    const stateElement = document.getElementById(stateId);
+    if (valueElement) valueElement.textContent = value;
+    if (stateElement) stateElement.textContent = state;
+}
+
+/**
+ * Mensagem do estado de leitura, distinguindo sem permissão, servidor fora do ar e
+ * resposta fora do contrato. Nenhum deles pode ser confundido com zero real.
+ */
+function readFailureState(result, fallback = "Dados indisponíveis") {
+    if (result.status === 403) return "Seu perfil não possui permissão para esta consulta.";
+    if (result.status === 401) return "Sessão expirada.";
+    if (result.status === 0 || result.status === -1) return "Não foi possível conectar ao servidor.";
+    if (result.status >= 500) return "O servidor não respondeu a esta consulta.";
+    return fallback;
+}
+
+function finiteCount(raw) {
+    if (typeof raw !== "number" && typeof raw !== "string") return null;
+    if (raw === "") return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/**
+ * Cards Detecções avaliadas e Conformidade EPI — GET /estatisticas/conformes.
+ * O percentual só é calculado com denominador válido: base sem observação alguma
+ * mostra estado próprio, nunca 100%.
+ */
+async function loadDashboardCompliance() {
+    const result = await apiGetComplianceCounts();
+    const compliant = finiteCount(result.data?.total_conformes);
+    const nonCompliant = finiteCount(result.data?.total_nao_conformes);
+
+    if (!result.ok || compliant === null || nonCompliant === null) {
+        const state = readFailureState(result);
+        setKpi("dashboardEvaluated", "dashboardEvaluatedState", "—", state);
+        setKpi("dashboardCompliance", "dashboardComplianceState", "—", state);
+        return;
+    }
+
+    const total = compliant + nonCompliant;
+    setKpi("dashboardEvaluated", "dashboardEvaluatedState",
+        total.toLocaleString("pt-BR"), "Total acumulado");
+
+    if (total === 0) {
+        setKpi("dashboardCompliance", "dashboardComplianceState", "—", "Sem observações registradas");
+        return;
+    }
+
+    setKpi("dashboardCompliance", "dashboardComplianceState",
+        `${(compliant / total * 100).toFixed(1).replace(".", ",")}%`,
+        `${compliant.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} — total acumulado`);
 }
 
 async function loadDashboardKpis() {
-    const cameras = await apiGet("/cameras/status");
-    const cameraCount = document.getElementById("dashboardCamerasOnline");
-    if (cameraCount) cameraCount.textContent = cameras.ok && Array.isArray(cameras.data)
-        ? `${cameras.data.filter(camera => camera.status === "Ativo").length}/${cameras.data.length}` : "—";
+    const result = await apiGet("/cameras/status");
+
+    if (!result.ok || !Array.isArray(result.data)) {
+        setKpi("dashboardCamerasOnline", "dashboardCamerasOnlineState", "—", readFailureState(result));
+        return;
+    }
+    // Base sem câmera é zero real, e zero real aparece como zero.
+    const online = result.data.filter(camera => camera.status === "Ativo").length;
+    setKpi("dashboardCamerasOnline", "dashboardCamerasOnlineState",
+        `${online}/${result.data.length}`,
+        result.data.length ? "Status atual das câmeras" : "Nenhuma câmera cadastrada");
 }
 
+/**
+ * Alertas recentes e o card "Alertas hoje".
+ *
+ * GET /alertas devolve o histórico completo e responde 404 quando não há nenhum
+ * alerta — esse 404 é vazio real, não erro. A data vem em HTTP-date, por isso o dia
+ * e a ordenação passam por backendDayKey()/backendTimestampKey().
+ */
 async function loadDashboardEvents() {
     const tbody = document.getElementById("dashboardEvents");
     if (!tbody) return;
-    document.getElementById("dashboardAlertsToday").textContent = "—";
 
     try {
         const result = await apiGet("/alertas");
+        const empty = result.status === 404;
 
-        if (result.status !== 404 && !result.ok) {
-            // Backend indisponível — exibe mensagem amigável
+        if (!empty && !result.ok) {
+            setKpi("dashboardAlertsToday", "dashboardAlertsTodayState", "—", readFailureState(result));
             tbody.innerHTML = `
                 <tr>
-                    <td colspan="4" style="text-align:center;color:var(--text-muted);padding:16px;">
-                        Não foi possível carregar os eventos. Backend indisponível.
-                    </td>
+                    <td colspan="4" class="empty">Não foi possível carregar os eventos.</td>
                 </tr>
             `;
             return;
         }
 
-        const valid = result.status === 404 || (result.ok && Array.isArray(result.data));
-        if (!valid) {
+        if (!empty && !Array.isArray(result.data)) {
+            setKpi("dashboardAlertsToday", "dashboardAlertsTodayState", "—", "Dados indisponíveis");
             tbody.innerHTML = '<tr><td colspan="4" class="empty">Dados indisponíveis</td></tr>';
             return;
         }
-        const alertas = Array.isArray(result.data) ? result.data : [];
-        const today = new Date();
-        const todayKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-        document.getElementById("dashboardAlertsToday").textContent = alertas.some(alert => !alert.data)
-            ? "—" : String(alertas.filter(alert => alert.data.slice(0, 10) === todayKey).length);
+
+        const alertas = empty || !Array.isArray(result.data) ? [] : result.data;
+        const days = alertas.map(alerta => backendDayKey(alerta?.data));
+
+        // Uma única data ilegível já torna a contagem do dia incerta: melhor não
+        // afirmar um número do que afirmar um número errado.
+        if (days.some(day => !day)) {
+            setKpi("dashboardAlertsToday", "dashboardAlertsTodayState", "—", "Datas em formato não reconhecido");
+        } else {
+            const today = localDayKey();
+            setKpi("dashboardAlertsToday", "dashboardAlertsTodayState",
+                String(days.filter(day => day === today).length), "Registros de hoje");
+        }
 
         if (alertas.length === 0) {
             tbody.innerHTML = `
@@ -64,8 +151,10 @@ async function loadDashboardEvents() {
             return;
         }
 
-        // A listagem não garante ordenação; a data REST permite ordenação lexical.
-        const recentes = [...alertas].sort((a, b) => String(b.data || "").localeCompare(String(a.data || ""))).slice(0, 3);
+        // A listagem não garante ordenação; o carimbo normalizado ordena por texto.
+        const recentes = [...alertas]
+            .sort((a, b) => backendTimestampKey(b?.data).localeCompare(backendTimestampKey(a?.data)))
+            .slice(0, 3);
 
         tbody.innerHTML = recentes.map(alerta => {
             const meta = notificationSeverityMeta(alerta.severidade);
@@ -87,11 +176,10 @@ async function loadDashboardEvents() {
 
     } catch (e) {
         console.error("[Dashboard] Erro ao carregar eventos:", e);
+        setKpi("dashboardAlertsToday", "dashboardAlertsTodayState", "—", "Dados indisponíveis");
         tbody.innerHTML = `
             <tr>
-                <td colspan="4" style="text-align:center;color:var(--danger);">
-                    Erro ao carregar eventos.
-                </td>
+                <td colspan="4" class="empty">Erro ao carregar eventos.</td>
             </tr>
         `;
     }
@@ -128,6 +216,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Carrega eventos reais
     loadDashboardEvents();
     loadDashboardKpis();
+    loadDashboardCompliance();
 
     const dark = document.documentElement.dataset.theme === "dark";
     if (typeof Chart !== "function") {

@@ -59,10 +59,10 @@
 
         
 <div class="grid kpi-grid">
-    <article class="card kpi"><i class="fa-solid fa-users"></i><h3>Colaboradores</h3><strong>—</strong><p class="text-muted">Dados indisponíveis</p></article>
-    <article class="card kpi"><i class="fa-solid fa-circle-check"></i><h3>Conformes</h3><strong>—</strong><p class="text-muted">Dados indisponíveis</p></article>
-    <article class="card kpi"><i class="fa-solid fa-triangle-exclamation"></i><h3>Não Conformes</h3><strong>—</strong><p class="text-muted">Dados indisponíveis</p></article>
-    <article class="card kpi"><i class="fa-solid fa-graduation-cap"></i><h3>Treinamentos</h3><strong>—</strong><p class="text-muted">Dados indisponíveis</p></article>
+    <article class="card kpi"><i class="fa-solid fa-circle-check"></i><h3>Conformes</h3><strong id="compliantCount">—</strong><p class="text-muted" id="compliantState" role="status" aria-live="polite">Carregando estatísticas...</p></article>
+    <article class="card kpi"><i class="fa-solid fa-triangle-exclamation"></i><h3>Não Conformes</h3><strong id="nonCompliantCount">—</strong><p class="text-muted" id="nonCompliantState" role="status" aria-live="polite">Carregando estatísticas...</p></article>
+    <article class="card kpi"><i class="fa-solid fa-eye"></i><h3>Detecções avaliadas</h3><strong id="evaluatedCount">—</strong><p class="text-muted" id="evaluatedState" role="status" aria-live="polite">Carregando estatísticas...</p></article>
+    <article class="card kpi"><i class="fa-solid fa-shield-halved"></i><h3>Taxa de conformidade</h3><strong id="complianceRate">—</strong><p class="text-muted" id="complianceRateState" role="status" aria-live="polite">Carregando estatísticas...</p></article>
 </div>
 
 <div class="grid charts-grid">
@@ -70,58 +70,11 @@
     <article class="card"><div class="section-title"><h2>Alertas por categoria de EPI</h2></div><div class="chart-box"><canvas id="ppeIssueChart"></canvas></div></article>
 </div>
 
-<article class="card table-card">
-    <div class="table-head"><div><h2>Colaboradores Monitorados</h2></div></div>
 
-    <div class="table-wrap">
-        <table>
-            <thead>
-                <tr><th>Colaborador</th><th>Setor</th><th>Última verificação</th><th>Status</th><th>Ação</th></tr>
-            </thead>
-            <tbody id="workersTable"></tbody>
-        </table>
-    </div>
-</article>
 
     </main>
 
 
-<div class="modal" id="workerModal">
-    <div class="modal-box worker-modal-box">
-        <button class="modal-close" id="closeWorkerModal" type="button">&times;</button>
-
-        <div class="page-title" style="margin-bottom:20px">
-            <h2>Detalhes do Colaborador</h2>
-            <p class="text-muted">Informações da última verificação de EPIs.</p>
-        </div>
-
-        <div class="worker-profile">
-            <div class="avatar worker-avatar" id="workerAvatar">—</div>
-            <div>
-                <h3 id="workerName">—</h3>
-                <p class="text-muted" id="workerSector">—</p>
-            </div>
-        </div>
-
-        <div class="worker-detail-grid">
-            <div class="worker-detail-card"><span>Última verificação</span><strong id="workerLastCheck">—</strong></div>
-            <div class="worker-detail-card"><span>Status</span><strong id="workerStatus">—</strong></div>
-            <div class="worker-detail-card"><span>Matrícula</span><strong id="workerRegistration">—</strong></div>
-            <div class="worker-detail-card"><span>Turno</span><strong id="workerShift">—</strong></div>
-        </div>
-
-        <div class="card" style="box-shadow:none;margin-top:20px">
-            <div class="section-title"><h3>EPIs identificados</h3></div>
-            <div id="workerPpeList" class="worker-ppe-list"></div>
-        </div>
-
-        <div class="modal-footer">
-            <button class="btn secondary" id="closeWorkerModalFooter" type="button">Fechar</button>
-            <button class="btn" type="button" id="registerWorkerAction" disabled title="Registro de ações indisponível"><i class="fa-solid fa-clipboard-check"></i>Registrar ação</button>
-        </div>
-    </div>
-</div>
-
-    <div id="toastContainer" class="toast-container"></div>
+<div id="toastContainer" class="toast-container"></div>
 </body>
 </html>

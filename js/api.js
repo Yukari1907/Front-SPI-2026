@@ -13,7 +13,17 @@
 
 const API_BASE_URL = (window.SPI_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
 
+// Respostas de câmeras contêm a origem RTSP, possivelmente com senha. Nunca
+// persistir esse conteúdo; o cache de câmeras dura somente nesta página.
+const cameraApiCache = new Map();
+const isCameraCachePath = path => /^\/cameras(?:[/?]|$)/.test(path);
+try {
+    Object.keys(sessionStorage).filter(key => key.startsWith("visaoepi_cache:")
+        && /:\/cameras(?:[/?]|$)/.test(key)).forEach(key => sessionStorage.removeItem(key));
+} catch { /* Storage indisponível: câmeras continuam apenas em memória. */ }
+
 function clearApiSession() {
+    cameraApiCache.clear();
     localStorage.removeItem("visaoepi_session");
     localStorage.removeItem("visaoepi_profile");
     sessionStorage.removeItem("visaoepi_session");
@@ -84,7 +94,7 @@ async function apiRequest(path, options = {}) {
             return {
                 ok: false,
                 status: 0,
-                data: { message: "Não foi possível conectar ao servidor. Verifique se o backend está em execução." }
+                data: { message: "Não foi possível conectar ao servidor. Tente novamente." }
             };
         }
 
@@ -162,6 +172,7 @@ function apiCacheKey(path) {
  * @param {string} path
  */
 function apiClearCached(path) {
+    cameraApiCache.delete(apiCacheKey(path));
     try {
         sessionStorage.removeItem(apiCacheKey(path));
     } catch {
@@ -172,16 +183,19 @@ function apiClearCached(path) {
 /**
  * GET com cache curto em sessionStorage (sobrevive à navegação entre páginas
  * desta app multi-page, ao contrário de uma variável JS solta). Usado para
- * chamadas repetidas entre páginas, como /cameras e /setores.
+ * chamadas repetidas entre páginas, como /setores. Câmeras usam somente memória,
+ * pois a resposta necessária à edição pode conter credenciais na origem RTSP.
  * @param {string} path
  * @param {number} ttlMs - tempo de vida do cache, em milissegundos
  * @returns {Promise<{ok: boolean, status: number, data: any}>}
  */
 async function apiGetCached(path, ttlMs) {
     const cacheKey = apiCacheKey(path);
+    const memoryOnly = isCameraCachePath(path);
 
     try {
-        const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
+        const cached = memoryOnly ? cameraApiCache.get(cacheKey)
+            : JSON.parse(sessionStorage.getItem(cacheKey) || "null");
         if (cached && Date.now() - cached.savedAt < ttlMs) {
             return cached.result;
         }
@@ -193,7 +207,9 @@ async function apiGetCached(path, ttlMs) {
 
     if (result.ok) {
         try {
-            sessionStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), result }));
+            const entry = { savedAt: Date.now(), result };
+            if (memoryOnly) cameraApiCache.set(cacheKey, entry);
+            else sessionStorage.setItem(cacheKey, JSON.stringify(entry));
         } catch {
             // sessionStorage indisponível (modo privado, quota) — segue sem cache
         }
@@ -211,3 +227,62 @@ window.apiDelete = apiDelete;
 window.apiVideoUrl = apiVideoUrl;
 window.apiGetCached = apiGetCached;
 window.apiClearCached = apiClearCached;
+
+// Bloqueio do contrato atual de POST /video/lote/{n}: a rota chama
+// parar_vision_workers() e iniciar_vision_workers() sem tratamento de falha — uma
+// exceção no reinício deixa a visão parada — e a resposta 200 devolve apenas
+// {message}, sem `tamanho_lote`, então o frontend não consegue confirmar o valor
+// aplicado. A LEITURA (GET /video/lote) é segura e está integrada.
+// Liberar SOMENTE em uma entrega validada com o backend; nunca por storage/query string.
+const VISION_CAPABILITIES = Object.freeze({ workerBatchUpdate: false });
+window.VISION_CAPABILITIES = VISION_CAPABILITIES;
+
+/**
+ * Estado atual do Active Learning.
+ * GET /active-learning/status → 200 {"enabled": boolean}. Exige admin ou supervisor.
+ */
+function apiGetActiveLearning() {
+    return apiGet("/active-learning/status");
+}
+
+/**
+ * Tamanho atual do lote de câmeras por worker.
+ * GET /video/lote → 200 {"tamanho_lote": int} | 503 {"message"} quando não há
+ * worker ativo. Exige admin.
+ */
+function apiGetWorkerBatch() {
+    return apiGet("/video/lote");
+}
+
+/**
+ * Quantidade de conformes e não conformes.
+ * GET /estatisticas/conformes → 200 {"total_conformes": int, "total_nao_conformes": int}.
+ * Exige apenas sessão ativa. Soma histórica global: a rota não aceita nenhum filtro.
+ */
+function apiGetComplianceCounts() {
+    return apiGet("/estatisticas/conformes");
+}
+
+function apiSetActiveLearning(enabled) {
+    if (typeof enabled !== "boolean") {
+        return Promise.resolve({ ok: false, status: 400, data: { message: "Estado inválido." } });
+    }
+    return apiPost("/active-learning/toggle", { enabled });
+}
+
+function apiSetWorkerBatch(value) {
+    const size = typeof value === "number" || typeof value === "string" ? Number(value) : NaN;
+    if (!Number.isSafeInteger(size) || size < 1) {
+        return Promise.resolve({ ok: false, status: 400, data: { message: "Informe um número inteiro maior ou igual a 1." } });
+    }
+    if (!VISION_CAPABILITIES.workerBatchUpdate) {
+        return Promise.resolve({ ok: false, status: 0, data: { message: "A alteração do lote está indisponível nesta versão." } });
+    }
+    return apiPost(`/video/lote/${size}`, { tamanho_lote: size });
+}
+
+window.apiGetActiveLearning = apiGetActiveLearning;
+window.apiGetWorkerBatch = apiGetWorkerBatch;
+window.apiGetComplianceCounts = apiGetComplianceCounts;
+window.apiSetActiveLearning = apiSetActiveLearning;
+window.apiSetWorkerBatch = apiSetWorkerBatch;

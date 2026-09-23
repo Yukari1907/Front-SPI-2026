@@ -50,7 +50,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (result.status === 0) {
                 // Backend indisponível
                 message.style.color = "#dc2626";
-                message.textContent = "Não foi possível conectar ao servidor. Verifique se o backend está em execução.";
+                message.textContent = "Não foi possível conectar ao servidor. Tente novamente.";
                 return;
             }
 

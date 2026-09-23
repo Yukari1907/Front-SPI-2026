@@ -18,6 +18,7 @@
 let alerts = [];
 let alertsLoaded = false;
 let currentAlertId = null;
+const resolvingAlerts = new Set();
 const ALERTS_PAGE_SIZE = 50;
 let currentPage = 1;
 
@@ -42,6 +43,7 @@ function fromApiAlerta(apiAlerta, locations) {
         id_zona: apiAlerta.id_zona,
         id_epi: apiAlerta.id_epi,
         id_monitorar: apiAlerta.id_monitorar,
+        type: apiAlerta.tipo_deteccao || "legado",
         // Nomes dos cadastros reais. Ausência não gera rótulos a partir de IDs.
         sector: name(sector),
         zone: name(zone),
@@ -108,13 +110,13 @@ function renderAlertCounts() {
 // ─────────────────────────────────────────────
 
 function formatDateTime(value) {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return new Intl.DateTimeFormat("pt-BR", {
-        dateStyle: "short",
-        timeStyle: "short"
-    }).format(date);
+    // Data e hora tal como o servidor registrou: o sufixo "GMT" do HTTP-date não
+    // corresponde ao horário local ingênuo gravado, e converter deslocaria o valor.
+    const key = backendTimestampKey(value);
+    if (!key) return "—";
+    const [date, time] = key.split("T");
+    const [year, month, day] = date.split("-");
+    return `${day}/${month}/${year}, ${time.slice(0, 5)}`;
 }
 
 function severityClass(severity) {
@@ -135,6 +137,9 @@ function getFilteredAlerts() {
     const searchTerm = normalizeFilterText($("alertSearch")?.value);
     const severity = $("alertSeverity")?.value || "";
     const status = $("alertStatus")?.value || "";
+    const type = $("alertType")?.value || "";
+    const start = $("alertStartDate")?.value || "";
+    const end = $("alertEndDate")?.value || "";
 
     return alerts.filter(alert => {
         const searchableText = normalizeFilterText([
@@ -150,7 +155,13 @@ function getFilteredAlerts() {
         const matchesSeverity = !severity || alert.severity === severity;
         const matchesStatus = !status || alert.status === status;
 
-        return matchesSearch && matchesSeverity && matchesStatus;
+        const matchesType = !type || (type === "postura"
+            ? ["postura_tronco", "postura_rotacao", "queda"].includes(alert.type) : alert.type === type);
+        // /alertas não aceita parâmetros de data. Filtramos a coleção real localmente.
+        // A data chega em HTTP-date, então o dia sai de backendDayKey().
+        const day = backendDayKey(alert.dateTime);
+        const matchesDate = (!start && !end) || (day && (!start || day >= start) && (!end || day <= end));
+        return matchesSearch && matchesSeverity && matchesStatus && matchesType && matchesDate;
     });
 }
 
@@ -240,6 +251,7 @@ function viewAlert(id) {
 
     const resolveButton = $("resolveAlertButton");
     if (resolveButton) {
+        resolveButton.disabled = resolvingAlerts.has(id);
         const canManage =
             typeof canPerform === "function" &&
             canPerform("alerts:manage");
@@ -267,29 +279,35 @@ async function resolveCurrentAlert() {
         return;
     }
 
-    if (!currentAlertId) return;
-
-    const result = await apiPut(`/alertas/${currentAlertId}/resolvido`);
-
-    if (result.status === 0) {
-        showToast("Backend indisponível.", "warning");
-        return;
-    }
-
-    if (result.ok) {
-        // Atualiza o estado local do alerta
-        const alert = alerts.find(item => item.id === currentAlertId);
-        if (alert) {
-            alert.status = "Resolvido";
-            alert.resolvido = true;
-            alert.action = "Ocorrência revisada e marcada como resolvida no sistema.";
+    const alertId = currentAlertId;
+    if (!alertId || resolvingAlerts.has(alertId)) return;
+    resolvingAlerts.add(alertId);
+    $("resolveAlertButton").disabled = true;
+    try {
+        const result = await apiPut(`/alertas/${alertId}/resolvido`);
+        if (result.status === 0) {
+            showToast("Não foi possível conectar ao servidor.", "warning");
+            return;
         }
-
-        renderAlerts();
-        closeAlertModal();
-        showToast("Alerta marcado como resolvido.");
-    } else {
-        showToast(result.data?.message || "Falha ao resolver alerta.", "danger");
+        if (result.ok) {
+            // A resposta pertence ao ID enviado, mesmo que outro modal esteja aberto.
+            const alert = alerts.find(item => item.id === alertId);
+            if (alert) {
+                alert.status = "Resolvido";
+                alert.resolvido = true;
+                alert.action = "Ocorrência revisada e marcada como resolvida no sistema.";
+            }
+            renderAlerts();
+            if (currentAlertId === alertId) closeAlertModal();
+            showToast("Alerta marcado como resolvido.");
+        } else {
+            showToast(result.data?.message || "Falha ao resolver alerta.", "danger");
+        }
+    } catch {
+        showToast("Não foi possível confirmar a resolução do alerta.", "danger");
+    } finally {
+        resolvingAlerts.delete(alertId);
+        $("resolveAlertButton").disabled = resolvingAlerts.has(currentAlertId);
     }
 }
 
@@ -309,6 +327,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     $("alertSearch")?.addEventListener("input", resetAlertsPage);
     $("alertSeverity")?.addEventListener("change", resetAlertsPage);
     $("alertStatus")?.addEventListener("change", resetAlertsPage);
+    ["alertType", "alertStartDate", "alertEndDate"].forEach(id => $(id)?.addEventListener("change", resetAlertsPage));
 
     $("alertsPrevious").addEventListener("click", () => {
         if ($("alertsPrevious").disabled) return;

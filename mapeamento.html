@@ -73,8 +73,29 @@
 
     <aside class="grid" style="align-content:start">
         <article class="card">
-            <div class="section-title"><h2>Setores</h2></div>
+            <div class="section-title">
+                <h2>Setores</h2>
+                <button class="btn" id="openSectorModal" type="button" data-permission="sectors:manage">
+                    <i class="fa-solid fa-plus"></i>
+                    Novo setor
+                </button>
+            </div>
+
             <div id="sectorList"></div>
+            <p id="sectorFeedback" class="text-muted" role="status" aria-live="polite"></p>
+        </article>
+
+        <article class="card">
+            <div class="section-title">
+                <h2>Câmeras</h2>
+                <button class="btn" id="openCameraCreateModal" type="button" data-permission="cameras:create">
+                    <i class="fa-solid fa-plus"></i>
+                    Nova câmera
+                </button>
+            </div>
+
+            <div id="cameraList"></div>
+            <p id="cameraFeedback" class="text-muted" role="status" aria-live="polite"></p>
         </article>
 
         <article class="card">
@@ -135,21 +156,23 @@
                     >
                 </div>
 
-                <div class="form-group" id="zoneEpiGroup">
-                    <label for="zoneEpi">EPI obrigatório</label>
-                    <select id="zoneEpi" name="id_epi" disabled>
-                        <option value="">Carregando EPIs cadastrados…</option>
-                    </select>
-                    <small id="zoneEpiHint" class="text-muted">
-                        Opcional. As opções vêm do cadastro real de EPIs.
-                    </small>
-                </div>
+                <fieldset class="form-group epi-picker" id="zoneEpiGroup">
+                    <legend>EPIs obrigatórios nesta zona</legend>
+                    <p id="zoneEpiHint" class="text-muted epi-picker-hint">
+                        Marque quantos precisar. Sem nenhum marcado, a zona não exige EPI.
+                    </p>
+                    <div id="zoneEpiOptions" class="epi-picker-options" role="group"
+                        aria-labelledby="zoneEpiHint" aria-busy="true">
+                        <p class="text-muted">Carregando EPIs cadastrados…</p>
+                    </div>
+                    <p id="zoneEpiSelectionSummary" class="text-muted epi-picker-summary" role="status" aria-live="polite"></p>
+                </fieldset>
 
                 <div class="form-group" id="zoneEpiUnavailable" hidden>
-                    <label>EPI obrigatório</label>
+                    <label>EPIs obrigatórios nesta zona</label>
                     <small class="text-muted">
-                        Indisponível na edição: o backend não retorna o EPI associado à zona
-                        e <code>PUT /zonas/{id}</code> não altera essa associação.
+                        Não foi possível confirmar quais EPIs esta zona exige hoje.
+                        Os EPIs atuais dela ficam como estão ao salvar.
                     </small>
                 </div>
 
@@ -207,6 +230,98 @@
                 <button class="btn" id="saveZoneButton" type="submit">
                     <i class="fa-solid fa-floppy-disk"></i>
                     <span id="saveZoneLabel">Criar zona</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="sectorModal" role="dialog" aria-modal="true" aria-labelledby="sectorModalTitle">
+    <div class="modal-box" style="width:min(520px,96vw)">
+        <button class="modal-close" data-close-modal type="button" aria-label="Fechar">&times;</button>
+
+        <div class="page-title" style="margin-bottom:20px">
+            <h2 id="sectorModalTitle">Novo setor</h2>
+            <p class="text-muted" id="sectorModalHint">Cadastre um setor da planta.</p>
+        </div>
+
+        <form id="sectorForm">
+            <input type="hidden" name="id">
+
+            <div class="form-group">
+                <label for="sectorName">Nome do setor</label>
+                <input id="sectorName" name="nome" type="text" maxlength="100" required placeholder="Ex.: Prensa">
+            </div>
+
+            <p id="sectorFormError" class="text-muted" role="status" aria-live="polite" style="color:var(--danger)" hidden></p>
+
+            <div class="modal-footer">
+                <button class="btn secondary" data-close-modal type="button">Cancelar</button>
+                <button class="btn" id="saveSector" type="submit">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span id="saveSectorLabel">Criar setor</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="modal" id="cameraCreateModal" role="dialog" aria-modal="true" aria-labelledby="cameraCreateModalTitle">
+    <div class="modal-box" style="width:min(720px,96vw)">
+        <button class="modal-close" data-close-modal type="button" aria-label="Fechar">&times;</button>
+
+        <div class="page-title" style="margin-bottom:20px">
+            <h2 id="cameraCreateModalTitle">Nova câmera</h2>
+            <p class="text-muted" id="cameraCreateHint">A câmera é cadastrada em um setor existente.</p>
+        </div>
+
+        <form id="cameraCreateForm">
+            <div class="modal-grid">
+                <div class="form-group">
+                    <label for="newCameraName">Nome</label>
+                    <input id="newCameraName" name="nome" type="text" maxlength="45" placeholder="Ex.: Entrada da prensa">
+                </div>
+
+                <div class="form-group">
+                    <label for="newCameraIp">Endereço / IP da câmera</label>
+                    <input id="newCameraIp" name="ip" type="password" autocomplete="off" maxlength="255" required
+                        placeholder="Ex.: rtsp://10.20.30.41:554/stream">
+                </div>
+
+                <div class="form-group">
+                    <label for="newCameraSector">Setor</label>
+                    <select id="newCameraSector" name="id_setor" required></select>
+                </div>
+
+                <div class="form-group">
+                    <label for="newCameraRotation">Rotação</label>
+                    <select id="newCameraRotation" name="rotacao">
+                        <option value="0">0°</option>
+                        <option value="90">90°</option>
+                        <option value="180">180°</option>
+                        <option value="270">270°</option>
+                    </select>
+                </div>
+            </div>
+
+            <label style="display:flex;align-items:center;gap:10px;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft)">
+                <input id="newCameraMirrorH" name="espelhar_horizontal" type="checkbox">
+                <span><strong>Espelhar horizontalmente</strong></span>
+            </label>
+
+            <label style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft)">
+                <input id="newCameraMirrorV" name="espelhar_vertical" type="checkbox">
+                <span><strong>Espelhar verticalmente</strong></span>
+            </label>
+
+            <p class="text-muted" style="margin-top:12px">Rotação e espelhamento podem ser revistos depois em Monitoramento.</p>
+            <p id="cameraCreateError" class="text-muted" role="status" aria-live="polite" style="color:var(--danger)" hidden></p>
+
+            <div class="modal-footer">
+                <button class="btn secondary" data-close-modal type="button">Cancelar</button>
+                <button class="btn" id="saveNewCamera" type="submit">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    Criar câmera
                 </button>
             </div>
         </form>

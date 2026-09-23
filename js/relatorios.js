@@ -3,6 +3,30 @@
 
 let reportSummary = null;
 let reportSectors = [];
+let reportComplianceValue = "Dados indisponíveis";
+
+async function loadReportCompliance() {
+    const end = new Date(), start = new Date();
+    start.setDate(start.getDate() - 29);
+    const day = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const params = new URLSearchParams({ data_inicio: `${day(start)} 00:00:00`, data_fim: `${day(end)} 23:59:59` });
+    const result = await apiGet(`/estatisticas/conformidade?${params}`);
+    const value = result.data?.conformidade_media;
+    const totals = ["total_deteccoes", "total_conformes", "total_nao_conformes"];
+    const valid = result.ok && totals.every(key => result.data?.[key] !== null && result.data?.[key] !== undefined
+        && Number.isFinite(Number(result.data[key])) && Number(result.data[key]) >= 0);
+    const label = document.getElementById("reportComplianceState");
+    if (valid && value === null) {
+        label.textContent = "Sem observações no período.";
+        reportComplianceValue = "Sem observações no período";
+    } else if (valid && value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0 && Number(value) <= 100) {
+        reportComplianceValue = `${Number(value).toFixed(1)}%`;
+        document.getElementById("reportComplianceAverage").textContent = reportComplianceValue;
+        label.textContent = "Últimos 30 dias, incluindo hoje";
+    } else {
+        label.textContent = result.status === 403 ? "Sem permissão para consultar." : "Estatísticas indisponíveis.";
+    }
+}
 
 async function loadReports() {
     const results = await Promise.all([apiGet("/alertas"), apiGet("/cameras"), apiGet("/setores"), apiGet("/zonas")]);
@@ -13,17 +37,16 @@ async function loadReports() {
         return;
     }
     const alerts = alertsResult.status === 404 ? [] : alertsResult.data;
-    // Datas REST são horários locais do backend, sem fuso no contrato.
-    if (alerts.some(alert => !/^\d{4}-\d{2}-\d{2} /.test(alert.data || "") || Number.isNaN(new Date(alert.data.replace(" ", "T")).getTime()))) {
+    // Datas REST são horários locais do backend serializados em HTTP-date;
+    // backendDayKey() as normaliza sem reinterpretar o fuso.
+    const days = alerts.map(alert => backendDayKey(alert?.data));
+    if (days.some(day => !day)) {
         showChartState("reportAlerts", "Datas dos alertas indisponíveis.");
         return;
     }
-    const end = new Date(); end.setHours(23, 59, 59, 999);
-    const start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - 29);
-    const filtered = alerts.filter(alert => {
-        const date = new Date(alert.data.replace(" ", "T"));
-        return date >= start && date <= end;
-    });
+    const last = new Date(); const first = new Date(); first.setDate(first.getDate() - 29);
+    const start = localDayKey(first), end = localDayKey(last);
+    const filtered = alerts.filter((_, index) => days[index] >= start && days[index] <= end);
     const resolved = filtered.filter(alert => alert.resolvido === true).length;
     reportSummary = { total: filtered.length, resolved, rate: filtered.length ? `${(resolved / filtered.length * 100).toFixed(1)}%` : "—" };
     document.getElementById("reportTotal").textContent = reportSummary.total;
@@ -55,10 +78,6 @@ async function loadReports() {
     });
 }
 
-function csvEscape(value){
-    return `"${String(value ?? "").replaceAll('"', '""')}"`;
-}
-
 function exportReportsCsv(){
     if (!reportSummary) return;
     const rows = [
@@ -66,7 +85,7 @@ function exportReportsCsv(){
         [],
         ["INDICADORES GERAIS"],
         ["Indicador", "Valor"],
-        ["Conformidade média", "Dados indisponíveis"],
+        ["Conformidade média", reportComplianceValue],
         ["Alertas nos últimos 30 dias (incluindo hoje)", reportSummary.total],
         ["Alertas resolvidos", reportSummary.resolved],
         ["Taxa de resolução", reportSummary.rate],
@@ -122,5 +141,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.getElementById("printReport").addEventListener("click", () => window.print());
     document.getElementById("exportReport").disabled = true;
     document.getElementById("exportReport").addEventListener("click", exportReportsCsv);
-    await loadReports();
+    await Promise.all([loadReports(), loadReportCompliance()]);
 });

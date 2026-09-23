@@ -8,6 +8,7 @@
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
     <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/configuracao.css">
     
 
     <script src="js/api.js"></script>
@@ -26,7 +27,7 @@
         <div class="topbar">
             <div class="page-title">
                 <h1>Configurações</h1>
-                <p class="text-muted">Personalize a aparência neste navegador.</p>
+                <p class="text-muted">Ajuste a visão computacional e a aparência neste navegador.</p>
             </div>
 
             
@@ -62,9 +63,38 @@
     <button class="btn" id="saveSettings"><i class="fa-solid fa-floppy-disk"></i>Salvar tema</button>
 </div>
 
-<div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr))">
-    <article class="card">
+<div class="grid settings-grid">
+    <article class="card vision-settings">
         <div class="section-title"><h2>Visão Computacional</h2></div>
+
+        <section class="vision-control" aria-labelledby="activeLearningTitle">
+            <h3 id="activeLearningTitle">Active Learning</h3>
+            <p class="text-muted">Controle a captura de amostras para aprimorar o modelo.</p>
+            <p id="activeLearningState" role="status" aria-live="polite">Estado atual: indisponível</p>
+            <div class="vision-actions" id="activeLearningActions" aria-busy="false">
+                <button type="button" class="btn" id="enableActiveLearning" disabled>Ativar</button>
+                <button type="button" class="btn secondary" id="disableActiveLearning" disabled>Desativar</button>
+            </div>
+            <p class="text-muted" id="activeLearningPermission">Disponível para administradores e supervisores.</p>
+            <p class="text-muted">O estado atual não está disponível para consulta. Uma confirmação vale apenas para esta sessão da página.</p>
+            <p id="activeLearningFeedback" role="status" aria-live="polite"></p>
+        </section>
+
+        <section class="vision-control" aria-labelledby="workerBatchTitle">
+            <h3 id="workerBatchTitle">Tamanho do lote de workers</h3>
+            <p class="text-muted" id="workerBatchDescription">A alteração reorganiza e reinicia os workers que processam as câmeras.</p>
+            <p id="workerBatchState" role="status" aria-live="polite">Valor atual: indisponível</p>
+            <form id="workerBatchForm" class="vision-actions">
+                <div class="form-group">
+                    <label for="workerBatchSize">Câmeras por lote</label>
+                    <input id="workerBatchSize" name="tamanho_lote" type="number" min="1" step="1" required placeholder="Informe um inteiro" aria-describedby="workerBatchDescription workerBatchAvailability" disabled>
+                </div>
+                <button type="submit" class="btn" id="applyWorkerBatch" disabled>Aplicar</button>
+            </form>
+            <p id="workerBatchAvailability" class="text-muted">A alteração do lote está indisponível nesta versão.</p>
+            <p class="text-muted" id="workerBatchPermission">Alteração reservada a administradores.</p>
+            <p id="workerBatchFeedback" role="status" aria-live="polite"></p>
+        </section>
 
         <div class="grid">
             <div class="form-group">

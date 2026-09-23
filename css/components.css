@@ -535,6 +535,10 @@ html[data-theme="dark"] select option{
     border-bottom:1px solid var(--border);
 }
 
+/* Aviso de estado da listagem, alinhado ao cabeçalho do card de tabela. */
+.table-feedback{padding:12px 24px 0}
+.table-feedback[hidden]{display:none}
+
 .table-wrap{
     width:100%;
     overflow:auto;
@@ -1111,5 +1115,8 @@ body[data-page="alerts"] .table-wrap td:nth-child(3){
 
 .notification-clear-btn i{
     font-size:12px;
+}
+[hidden] {
+    display: none !important;
 }
 
