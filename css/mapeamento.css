@@ -57,25 +57,71 @@
     user-select:none;
     -webkit-user-drag:none;
 }
-#zoneAreaOverlay{
-    position:absolute;
-    inset:0;
-    width:100%;
-    height:100%;
-    touch-action:none;
-    user-select:none;
-    cursor:crosshair;
+
+/* Container da imagem */
+.zone-frame-container {
+    max-width: 100%;
+    background: #0f172a;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
 }
-#zoneAreaOverlay.is-busy{pointer-events:none;cursor:wait}
+
+#zoneFrameStage {
+    position: relative;
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+}
 
 #zoneAreaOverlay {
-    background: transparent !important;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    user-select: none;
+    cursor: crosshair;
 }
 
-#zoneAreaPolygon {
-    fill: rgba(49, 85, 245, 0.25) !important;
-    stroke: #3155f5 !important;
-    stroke-width: 2 !important;
+#zoneAreaOverlay.is-busy {
+    pointer-events: none;
+    cursor: wait;
+}
+
+/* Polígono de Risco / Restrita */
+.zone-poly-danger {
+    fill: rgba(239, 68, 68, 0.28) !important;
+    stroke: #ef4444 !important;
+    stroke-width: 2px !important;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+/* Polígono Permitido */
+.zone-poly-allowed {
+    fill: rgba(16, 185, 129, 0.28) !important;
+    stroke: #10b981 !important;
+    stroke-width: 2px !important;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+/* Linha elástica que acompanha o mouse */
+.zone-elastic-line {
+    stroke-width: 1.5px;
+    stroke-dasharray: 4, 4;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
+}
+
+/* Linha de fechamento pontilhada suave */
+.zone-closing-line {
+    stroke-width: 1.5px;
+    stroke-dasharray: 3, 3;
+    opacity: 0.7;
+    vector-effect: non-scaling-stroke;
+    pointer-events: none;
 }
 
 .zone-area-actions{display:flex;flex-wrap:wrap;gap:10px}

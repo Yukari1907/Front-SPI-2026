@@ -164,7 +164,17 @@
                             <div id="zoneFrameMedia"></div>
                             <svg id="zoneAreaOverlay" viewBox="0 0 1 1" preserveAspectRatio="none"
                                 aria-label="Desenhar área da zona" aria-describedby="zoneAreaHint">
-                                <polygon id="zoneAreaPolygon" vector-effect="non-scaling-stroke" style="display:none;" />
+
+                                <!-- Linha de fechamento provisória -->
+                                <line id="zoneClosingLine" class="zone-closing-line" style="display:none;" />
+
+                                <!-- Polígono principal (com vector-effect para manter borda uniforme) -->
+                                <polygon id="zoneAreaPolygon" class="zone-poly-danger" vector-effect="non-scaling-stroke" style="display:none;" />
+
+                                <!-- Linha elástica guia -->
+                                <line id="zoneElasticLine" class="zone-elastic-line" style="display:none;" />
+
+                                <!-- Marcadores de vértices -->
                                 <g id="zonePointsGroup"></g>
                             </svg>
                         </div>

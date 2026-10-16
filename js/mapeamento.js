@@ -152,34 +152,61 @@ async function loadRiskZones(cameras = mappingCameras) {
     mappingZones = result.data;
     list.innerHTML = mappingZones.length ? mappingZones.map(zone => {
         const camera = cameras.find(item => item.id === zone.id_camera);
-        const pontosQtd = Array.isArray(zone.poligono) ? zone.poligono.length : 0;
         return `
             <div style="padding:12px 0;border-bottom:1px solid var(--border)">
                 <strong>${escapeHtml(zone.nome || `Zona ${zone.id}`)}</strong>
-                <p class="text-muted">
-                    ${escapeHtml(camera?.nome || `Câmera ${zone.id_camera}`)}
-                    ${pontosQtd ? ` · ${pontosQtd} vértices` : ""}
-                </p>
+                <p class="text-muted">${escapeHtml(camera?.nome || `Câmera ${zone.id_camera}`)}</p>
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
                     <span class="badge ${zone.permitido ? "success" : "danger"}">${zone.permitido ? "Permitida" : "Restrita / de risco"}</span>
                     <button class="btn secondary" type="button" data-edit-zone="${escapeHtml(zone.id)}">
                         <i class="fa-solid fa-pen"></i>
                         Editar zona
                     </button>
-                    <button class="btn secondary" type="button" disabled
-                        title="A exclusão de zonas está indisponível nesta versão."
-                        aria-describedby="zoneDeleteUnavailable">Excluir zona</button>
+                    <button class="btn secondary" type="button" data-delete-zone="${escapeHtml(zone.id)}">
+                        <i class="fa-solid fa-trash"></i>
+                        Excluir zona
+                    </button>
                 </div>
             </div>
         `;
-    }).join("") + '<p id="zoneDeleteUnavailable" class="text-muted">A exclusão de zonas está indisponível nesta versão.</p>' : '<p class="text-muted">Nenhuma zona cadastrada.</p>';
+    }).join("") : '<p class="text-muted">Nenhuma zona cadastrada.</p>';
 
+    // Listener para o botão de editar
     list.querySelectorAll("[data-edit-zone]").forEach(button => {
         button.addEventListener("click", () => {
             const zone = mappingZones.find(item => String(item.id) === button.dataset.editZone);
             if (zone) openZoneModal(zone);
         });
     });
+
+    // Listener para o botão de excluir
+    list.querySelectorAll("[data-delete-zone]").forEach(button => {
+        button.addEventListener("click", () => {
+            deleteZone(Number(button.dataset.deleteZone));
+        });
+    });
+}
+
+async function deleteZone(id) {
+    const zone = mappingZones.find(item => item.id === id);
+    if (!zone) return;
+
+    const confirmacao = `Deseja realmente excluir a zona "${zone.nome || `Zona ${id}`}"? Esta ação não pode ser desfeita.`;
+    if (!confirm(confirmacao)) return;
+
+    try {
+        const result = await apiDelete(`/zonas/${id}`);
+        if (!result.ok) {
+            showToast(result.data?.message || "Não foi possível excluir a zona.", "danger");
+            return;
+        }
+
+        showToast("Zona excluída com sucesso.");
+        // Atualiza a listagem de zonas na tela
+        await loadRiskZones();
+    } catch (error) {
+        showToast("Erro ao tentar excluir a zona. Tente novamente.", "danger");
+    }
 }
 
 /**
@@ -330,6 +357,7 @@ function openZoneModal(zone = null) {
         cameraSelect.value = String(zone.id_camera);
         document.getElementById("zoneName").value = zone.nome || "";
         document.getElementById("zoneAllowed").checked = zone.permitido === true;
+        zoneAreaEditor.setTheme(zone.permitido === true);
 
         const poligono = Array.isArray(zone.poligono) ? zone.poligono : [];
         zoneAreaEditor.load(
