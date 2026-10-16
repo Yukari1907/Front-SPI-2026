@@ -67,9 +67,20 @@
     cursor:crosshair;
 }
 #zoneAreaOverlay.is-busy{pointer-events:none;cursor:wait}
-#zoneAreaRect{fill:rgba(49,85,245,.25);stroke:#fff;stroke-width:2;filter:drop-shadow(0 0 1px #000)}
+
+#zoneAreaOverlay {
+    background: transparent !important;
+}
+
+#zoneAreaPolygon {
+    fill: rgba(49, 85, 245, 0.25) !important;
+    stroke: #3155f5 !important;
+    stroke-width: 2 !important;
+}
+
 .zone-area-actions{display:flex;flex-wrap:wrap;gap:10px}
 #zoneModal button:disabled{opacity:.6;cursor:default}
+
 @media(max-width:480px){
     #zoneModal{padding:10px}
     #zoneModal .modal-box{padding:18px;max-height:94vh;max-height:94dvh}
@@ -93,6 +104,7 @@
 #sectorModal .modal-box,#cameraCreateModal .modal-box{max-width:100%}
 #sectorModal .page-title,#cameraCreateModal .page-title{padding-right:36px}
 #sectorModal button:disabled,#cameraCreateModal button:disabled{opacity:.6;cursor:default}
+
 @media(max-width:480px){
     #sectorModal,#cameraCreateModal{padding:10px}
     #sectorModal .modal-box,#cameraCreateModal .modal-box{padding:18px;max-height:94vh;max-height:94dvh}

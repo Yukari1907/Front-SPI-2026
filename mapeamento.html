@@ -9,7 +9,6 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
     <link rel="stylesheet" href="css/components.css">
     <link rel="stylesheet" href="css/mapeamento.css">
-    
 
     <script src="js/api.js"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
@@ -31,302 +30,262 @@
                 <p class="text-muted">Visualize setores, câmeras e zonas de risco da fábrica.</p>
             </div>
 
-            
-<div class="top-actions">
-    <div class="search-global">
-        <input id="globalSearch" placeholder="Pesquisar no sistema">
-        <i class="fa-solid fa-magnifying-glass"></i>
-    </div>
+            <div class="top-actions">
+                <div class="search-global">
+                    <input id="globalSearch" placeholder="Pesquisar no sistema">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </div>
 
-    <div class="notification-wrap">
-        <button class="notification-btn" id="notificationButton" type="button">
-            <i class="fa-solid fa-bell"></i>
-        </button>
+                <div class="notification-wrap">
+                    <button class="notification-btn" id="notificationButton" type="button">
+                        <i class="fa-solid fa-bell"></i>
+                    </button>
 
-        <span class="notification-count" id="notificationCount">0</span>
+                    <span class="notification-count" id="notificationCount">0</span>
 
-        <div class="notification-panel" id="notificationPanel">
-            <div class="section-title"><h3>Notificações</h3></div>
+                    <div class="notification-panel" id="notificationPanel">
+                        <div class="section-title"><h3>Notificações</h3></div>
 
-            <div class="notification-list" id="notificationList">
-                <div class="notification-empty text-muted" style="padding:12px 0">Nenhuma notificação recente.</div>
+                        <div class="notification-list" id="notificationList">
+                            <div class="notification-empty text-muted" style="padding:12px 0">Nenhuma notificação recente.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="user-chip" id="userChip"></div>
             </div>
         </div>
-    </div>
 
-    <div class="user-chip" id="userChip"></div>
-</div>
+        <div class="grid mapping-grid">
+            <article class="card">
+                <div class="section-title">
+                    <h2>Planta da Fábrica</h2>
+                    <span id="mapCamerasOnline" class="badge" role="status">— câmeras online</span>
+                </div>
 
+                <p class="text-muted">Posições ilustrativas das câmeras, sem coordenadas físicas.</p>
+                <div id="factoryMap" aria-label="Planta da fábrica com localização ilustrativa das câmeras"></div>
+            </article>
+
+            <aside class="grid" style="align-content:start">
+                <article class="card">
+                    <div class="section-title">
+                        <h2>Setores</h2>
+                        <button class="btn" id="openSectorModal" type="button" data-permission="sectors:manage">
+                            <i class="fa-solid fa-plus"></i>
+                            Novo setor
+                        </button>
+                    </div>
+
+                    <div id="sectorList"></div>
+                    <p id="sectorFeedback" class="text-muted" role="status" aria-live="polite"></p>
+                </article>
+
+                <article class="card">
+                    <div class="section-title">
+                        <h2>Câmeras</h2>
+                        <button class="btn" id="openCameraCreateModal" type="button" data-permission="cameras:create">
+                            <i class="fa-solid fa-plus"></i>
+                            Nova câmera
+                        </button>
+                    </div>
+
+                    <div id="cameraList"></div>
+                    <p id="cameraFeedback" class="text-muted" role="status" aria-live="polite"></p>
+                </article>
+
+                <article class="card">
+                    <div class="section-title">
+                        <h2>Zonas de Risco</h2>
+                        <button class="btn" id="openZoneModal" type="button">
+                            <i class="fa-solid fa-plus"></i>
+                            Nova zona
+                        </button>
+                    </div>
+
+                    <div id="riskZonesList">
+                        <p class="text-muted">Carregando zonas cadastradas...</p>
+                    </div>
+                </article>
+            </aside>
         </div>
-
-        
-<div class="grid mapping-grid">
-    <article class="card">
-        <div class="section-title">
-            <h2>Planta da Fábrica</h2>
-            <span id="mapCamerasOnline" class="badge" role="status">— câmeras online</span>
-        </div>
-
-        <p class="text-muted">Posições ilustrativas das câmeras, sem coordenadas físicas.</p>
-        <div id="factoryMap" aria-label="Planta da fábrica com localização ilustrativa das câmeras"></div>
-    </article>
-
-    <aside class="grid" style="align-content:start">
-        <article class="card">
-            <div class="section-title">
-                <h2>Setores</h2>
-                <button class="btn" id="openSectorModal" type="button" data-permission="sectors:manage">
-                    <i class="fa-solid fa-plus"></i>
-                    Novo setor
-                </button>
-            </div>
-
-            <div id="sectorList"></div>
-            <p id="sectorFeedback" class="text-muted" role="status" aria-live="polite"></p>
-        </article>
-
-        <article class="card">
-            <div class="section-title">
-                <h2>Câmeras</h2>
-                <button class="btn" id="openCameraCreateModal" type="button" data-permission="cameras:create">
-                    <i class="fa-solid fa-plus"></i>
-                    Nova câmera
-                </button>
-            </div>
-
-            <div id="cameraList"></div>
-            <p id="cameraFeedback" class="text-muted" role="status" aria-live="polite"></p>
-        </article>
-
-        <article class="card">
-            <div class="section-title">
-                <h2>Zonas de Risco</h2>
-                <button class="btn" id="openZoneModal" type="button">
-                    <i class="fa-solid fa-plus"></i>
-                    Nova zona
-                </button>
-            </div>
-
-            <div id="riskZonesList">
-                <p class="text-muted">Carregando zonas cadastradas...</p>
-            </div>
-        </article>
-    </aside>
-</div>
-
     </main>
 
+    <div class="modal" id="zoneModal" role="dialog" aria-modal="true" aria-labelledby="zoneModalTitle">
+        <div class="modal-box" style="width:min(760px,96vw)">
+            <button class="modal-close" id="closeZoneModal" type="button" aria-label="Fechar">&times;</button>
 
-<div class="modal" id="zoneModal" role="dialog" aria-modal="true" aria-labelledby="zoneModalTitle">
-    <div class="modal-box" style="width:min(760px,96vw)">
-        <button
-            class="modal-close"
-            id="closeZoneModal"
-            type="button"
-            aria-label="Fechar"
-        >
-            &times;
-        </button>
-
-        <div class="page-title" style="margin-bottom:20px">
-            <h2 id="zoneModalTitle">Criar nova zona</h2>
-            <p class="text-muted" id="zoneModalHint">
-                Escolha uma câmera e desenhe a área da zona sobre a imagem.
-            </p>
-        </div>
-
-        <form id="zoneForm">
-            <div class="modal-grid">
-                <div class="form-group">
-                    <label for="zoneCamera">Câmera</label>
-                    <select id="zoneCamera" name="id_camera" required>
-                        <option value="">Selecione uma câmera</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="zoneName">Nome da zona</label>
-                    <input
-                        id="zoneName"
-                        name="nome"
-                        type="text"
-                        maxlength="40"
-                        placeholder="Ex.: Área da prensa"
-                        required
-                    >
-                </div>
-
-                <fieldset class="form-group epi-picker" id="zoneEpiGroup">
-                    <legend>EPIs obrigatórios nesta zona</legend>
-                    <p id="zoneEpiHint" class="text-muted epi-picker-hint">
-                        Marque quantos precisar. Sem nenhum marcado, a zona não exige EPI.
-                    </p>
-                    <div id="zoneEpiOptions" class="epi-picker-options" role="group"
-                        aria-labelledby="zoneEpiHint" aria-busy="true">
-                        <p class="text-muted">Carregando EPIs cadastrados…</p>
-                    </div>
-                    <p id="zoneEpiSelectionSummary" class="text-muted epi-picker-summary" role="status" aria-live="polite"></p>
-                </fieldset>
-
-                <div class="form-group" id="zoneEpiUnavailable" hidden>
-                    <label>EPIs obrigatórios nesta zona</label>
-                    <small class="text-muted">
-                        Não foi possível confirmar quais EPIs esta zona exige hoje.
-                        Os EPIs atuais dela ficam como estão ao salvar.
-                    </small>
-                </div>
-
+            <div class="page-title" style="margin-bottom:20px">
+                <h2 id="zoneModalTitle">Criar nova zona</h2>
+                <p class="text-muted" id="zoneModalHint">
+                    Escolha uma câmera e marque os pontos do polígono da zona sobre a imagem.
+                </p>
             </div>
 
-            <section class="zone-area-editor" aria-labelledby="zoneAreaTitle">
-                <h3 id="zoneAreaTitle">Área da zona</h3>
-                <p id="zoneAreaHint" class="text-muted">Arraste sobre a imagem para definir a área da zona.</p>
-                <div class="zone-frame-container">
-                    <div id="zoneFrameStage" hidden>
-                        <div id="zoneFrameMedia"></div>
-                        <svg id="zoneAreaOverlay" viewBox="0 0 1 1" preserveAspectRatio="none"
-                            aria-label="Desenhar área da zona" aria-describedby="zoneAreaHint">
-                            <rect id="zoneAreaRect" vector-effect="non-scaling-stroke" style="display:none" />
-                        </svg>
+            <form id="zoneForm">
+                <div class="modal-grid">
+                    <div class="form-group">
+                        <label for="zoneCamera">Câmera</label>
+                        <select id="zoneCamera" name="id_camera" required>
+                            <option value="">Selecione uma câmera</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="zoneName">Nome da zona</label>
+                        <input id="zoneName" name="nome" type="text" maxlength="40" placeholder="Ex.: Área da prensa" required>
+                    </div>
+
+                    <fieldset class="form-group epi-picker" id="zoneEpiGroup">
+                        <legend>EPIs obrigatórios nesta zona</legend>
+                        <p id="zoneEpiHint" class="text-muted epi-picker-hint">
+                            Marque quantos precisar. Sem nenhum marcado, a zona não exige EPI.
+                        </p>
+                        <div id="zoneEpiOptions" class="epi-picker-options" role="group" aria-labelledby="zoneEpiHint" aria-busy="true">
+                            <p class="text-muted">Carregando EPIs cadastrados…</p>
+                        </div>
+                        <p id="zoneEpiSelectionSummary" class="text-muted epi-picker-summary" role="status" aria-live="polite"></p>
+                    </fieldset>
+
+                    <div class="form-group" id="zoneEpiUnavailable" hidden>
+                        <label>EPIs obrigatórios nesta zona</label>
+                        <small class="text-muted">
+                            Não foi possível confirmar quais EPIs esta zona exige hoje.
+                            Os EPIs atuais dela ficam como estão ao salvar.
+                        </small>
                     </div>
                 </div>
-                <p id="zoneAreaStatus" class="text-muted" role="status" aria-live="polite">Selecione uma câmera para carregar a imagem.</p>
-                <div class="zone-area-actions">
-                    <button class="btn secondary" id="resetZoneArea" type="button" disabled>Redefinir área</button>
-                    <button class="btn secondary" id="retryZoneFrame" type="button" hidden>Tentar novamente</button>
+
+                <section class="zone-area-editor" aria-labelledby="zoneAreaTitle">
+                    <h3 id="zoneAreaTitle">Área da zona</h3>
+                    <p id="zoneAreaHint" class="text-muted">Clique sobre a imagem para adicionar os pontos da zona (mínimo de 3 pontos).</p>
+                    <div class="zone-frame-container">
+                        <div id="zoneFrameStage" hidden>
+                            <div id="zoneFrameMedia"></div>
+                            <svg id="zoneAreaOverlay" viewBox="0 0 1 1" preserveAspectRatio="none"
+                                aria-label="Desenhar área da zona" aria-describedby="zoneAreaHint">
+                                <polygon id="zoneAreaPolygon" vector-effect="non-scaling-stroke" style="display:none;" />
+                                <g id="zonePointsGroup"></g>
+                            </svg>
+                        </div>
+                    </div>
+                    <p id="zoneAreaStatus" class="text-muted" role="status" aria-live="polite">Selecione uma câmera para carregar a imagem.</p>
+                    <div class="zone-area-actions">
+                        <button class="btn secondary" id="undoZonePoint" type="button" disabled>Desfazer último ponto</button>
+                        <button class="btn secondary" id="resetZoneArea" type="button" disabled>Limpar pontos</button>
+                        <button class="btn secondary" id="retryZoneFrame" type="button" hidden>Tentar novamente</button>
+                    </div>
+                </section>
+
+                <label style="display:flex;align-items:center;gap:10px;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft)">
+                    <input id="zoneAllowed" name="permitido" type="checkbox">
+                    <span>
+                        <strong>Zona permitida</strong><br>
+                        <small class="text-muted">Desmarcada = área restrita / de risco.</small>
+                    </span>
+                </label>
+
+                <div class="modal-footer">
+                    <button class="btn secondary" id="cancelZoneModal" type="button">Cancelar</button>
+                    <button class="btn" id="saveZoneButton" type="submit">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span id="saveZoneLabel">Criar zona</span>
+                    </button>
                 </div>
-            </section>
-
-            <label
-                style="
-                    display:flex;
-                    align-items:center;
-                    gap:10px;
-                    margin-top:18px;
-                    padding:14px;
-                    border:1px solid var(--border);
-                    border-radius:11px;
-                    background:var(--surface-soft);
-                "
-            >
-                <input id="zoneAllowed" name="permitido" type="checkbox">
-                <span>
-                    <strong>Zona permitida</strong><br>
-                    <small class="text-muted">
-                        Desmarcada = área restrita / de risco.
-                    </small>
-                </span>
-            </label>
-
-            <div class="modal-footer">
-                <button
-                    class="btn secondary"
-                    id="cancelZoneModal"
-                    type="button"
-                >
-                    Cancelar
-                </button>
-
-                <button class="btn" id="saveZoneButton" type="submit">
-                    <i class="fa-solid fa-floppy-disk"></i>
-                    <span id="saveZoneLabel">Criar zona</span>
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<div class="modal" id="sectorModal" role="dialog" aria-modal="true" aria-labelledby="sectorModalTitle">
-    <div class="modal-box" style="width:min(520px,96vw)">
-        <button class="modal-close" data-close-modal type="button" aria-label="Fechar">&times;</button>
-
-        <div class="page-title" style="margin-bottom:20px">
-            <h2 id="sectorModalTitle">Novo setor</h2>
-            <p class="text-muted" id="sectorModalHint">Cadastre um setor da planta.</p>
+            </form>
         </div>
-
-        <form id="sectorForm">
-            <input type="hidden" name="id">
-
-            <div class="form-group">
-                <label for="sectorName">Nome do setor</label>
-                <input id="sectorName" name="nome" type="text" maxlength="100" required placeholder="Ex.: Prensa">
-            </div>
-
-            <p id="sectorFormError" class="text-muted" role="status" aria-live="polite" style="color:var(--danger)" hidden></p>
-
-            <div class="modal-footer">
-                <button class="btn secondary" data-close-modal type="button">Cancelar</button>
-                <button class="btn" id="saveSector" type="submit">
-                    <i class="fa-solid fa-floppy-disk"></i>
-                    <span id="saveSectorLabel">Criar setor</span>
-                </button>
-            </div>
-        </form>
     </div>
-</div>
 
-<div class="modal" id="cameraCreateModal" role="dialog" aria-modal="true" aria-labelledby="cameraCreateModalTitle">
-    <div class="modal-box" style="width:min(720px,96vw)">
-        <button class="modal-close" data-close-modal type="button" aria-label="Fechar">&times;</button>
+    <div class="modal" id="sectorModal" role="dialog" aria-modal="true" aria-labelledby="sectorModalTitle">
+        <div class="modal-box" style="width:min(520px,96vw)">
+            <button class="modal-close" data-close-modal type="button" aria-label="Fechar">&times;</button>
 
-        <div class="page-title" style="margin-bottom:20px">
-            <h2 id="cameraCreateModalTitle">Nova câmera</h2>
-            <p class="text-muted" id="cameraCreateHint">A câmera é cadastrada em um setor existente.</p>
+            <div class="page-title" style="margin-bottom:20px">
+                <h2 id="sectorModalTitle">Novo setor</h2>
+                <p class="text-muted" id="sectorModalHint">Cadastre um setor da planta.</p>
+            </div>
+
+            <form id="sectorForm">
+                <input type="hidden" name="id">
+
+                <div class="form-group">
+                    <label for="sectorName">Nome do setor</label>
+                    <input id="sectorName" name="nome" type="text" maxlength="100" required placeholder="Ex.: Prensa">
+                </div>
+
+                <p id="sectorFormError" class="text-muted" role="status" aria-live="polite" style="color:var(--danger)" hidden></p>
+
+                <div class="modal-footer">
+                    <button class="btn secondary" data-close-modal type="button">Cancelar</button>
+                    <button class="btn" id="saveSector" type="submit">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        <span id="saveSectorLabel">Criar setor</span>
+                    </button>
+                </div>
+            </form>
         </div>
-
-        <form id="cameraCreateForm">
-            <div class="modal-grid">
-                <div class="form-group">
-                    <label for="newCameraName">Nome</label>
-                    <input id="newCameraName" name="nome" type="text" maxlength="45" placeholder="Ex.: Entrada da prensa">
-                </div>
-
-                <div class="form-group">
-                    <label for="newCameraIp">Endereço / IP da câmera</label>
-                    <input id="newCameraIp" name="ip" type="password" autocomplete="off" maxlength="255" required
-                        placeholder="Ex.: rtsp://10.20.30.41:554/stream">
-                </div>
-
-                <div class="form-group">
-                    <label for="newCameraSector">Setor</label>
-                    <select id="newCameraSector" name="id_setor" required></select>
-                </div>
-
-                <div class="form-group">
-                    <label for="newCameraRotation">Rotação</label>
-                    <select id="newCameraRotation" name="rotacao">
-                        <option value="0">0°</option>
-                        <option value="90">90°</option>
-                        <option value="180">180°</option>
-                        <option value="270">270°</option>
-                    </select>
-                </div>
-            </div>
-
-            <label style="display:flex;align-items:center;gap:10px;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft)">
-                <input id="newCameraMirrorH" name="espelhar_horizontal" type="checkbox">
-                <span><strong>Espelhar horizontalmente</strong></span>
-            </label>
-
-            <label style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft)">
-                <input id="newCameraMirrorV" name="espelhar_vertical" type="checkbox">
-                <span><strong>Espelhar verticalmente</strong></span>
-            </label>
-
-            <p class="text-muted" style="margin-top:12px">Rotação e espelhamento podem ser revistos depois em Monitoramento.</p>
-            <p id="cameraCreateError" class="text-muted" role="status" aria-live="polite" style="color:var(--danger)" hidden></p>
-
-            <div class="modal-footer">
-                <button class="btn secondary" data-close-modal type="button">Cancelar</button>
-                <button class="btn" id="saveNewCamera" type="submit">
-                    <i class="fa-solid fa-floppy-disk"></i>
-                    Criar câmera
-                </button>
-            </div>
-        </form>
     </div>
-</div>
+
+    <div class="modal" id="cameraCreateModal" role="dialog" aria-modal="true" aria-labelledby="cameraCreateModalTitle">
+        <div class="modal-box" style="width:min(720px,96vw)">
+            <button class="modal-close" data-close-modal type="button" aria-label="Fechar">&times;</button>
+
+            <div class="page-title" style="margin-bottom:20px">
+                <h2 id="cameraCreateModalTitle">Nova câmera</h2>
+                <p class="text-muted" id="cameraCreateHint">A câmera é cadastrada em um setor existente.</p>
+            </div>
+
+            <form id="cameraCreateForm">
+                <div class="modal-grid">
+                    <div class="form-group">
+                        <label for="newCameraName">Nome</label>
+                        <input id="newCameraName" name="nome" type="text" maxlength="45" placeholder="Ex.: Entrada da prensa">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newCameraIp">Endereço / IP da câmera</label>
+                        <input id="newCameraIp" name="ip" type="password" autocomplete="off" maxlength="255" required placeholder="Ex.: rtsp://10.20.30.41:554/stream">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newCameraSector">Setor</label>
+                        <select id="newCameraSector" name="id_setor" required></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newCameraRotation">Rotação</label>
+                        <select id="newCameraRotation" name="rotacao">
+                            <option value="0">0°</option>
+                            <option value="90">90°</option>
+                            <option value="180">180°</option>
+                            <option value="270">270°</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label style="display:flex;align-items:center;gap:10px;margin-top:18px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft)">
+                    <input id="newCameraMirrorH" name="espelhar_horizontal" type="checkbox">
+                    <span><strong>Espelhar horizontalmente</strong></span>
+                </label>
+
+                <label style="display:flex;align-items:center;gap:10px;margin-top:12px;padding:14px;border:1px solid var(--border);border-radius:11px;background:var(--surface-soft)">
+                    <input id="newCameraMirrorV" name="espelhar_vertical" type="checkbox">
+                    <span><strong>Espelhar verticalmente</strong></span>
+                </label>
+
+                <p class="text-muted" style="margin-top:12px">Rotação e espelhamento podem ser revistos depois em Monitoramento.</p>
+                <p id="cameraCreateError" class="text-muted" role="status" aria-live="polite" style="color:var(--danger)" hidden></p>
+
+                <div class="modal-footer">
+                    <button class="btn secondary" data-close-modal type="button">Cancelar</button>
+                    <button class="btn" id="saveNewCamera" type="submit">
+                        <i class="fa-solid fa-floppy-disk"></i>
+                        Criar câmera
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 
     <div id="toastContainer" class="toast-container"></div>
 </body>

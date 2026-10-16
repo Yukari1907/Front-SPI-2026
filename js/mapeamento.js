@@ -43,8 +43,8 @@ function generatePositions(count) {
     for (let i = 0; i < count; i++) {
         const col = i % cols;
         const row = Math.floor(i / cols);
-        const x = ((col + 0.5) / cols) * 80 + 10; // 10-90%
-        const y = ((row + 0.5) / rows) * 70 + 15;  // 15-85%
+        const x = ((col + 0.5) / cols) * 80 + 10;
+        const y = ((row + 0.5) / rows) * 70 + 15;
         positions.push({ x, y });
     }
 
@@ -54,11 +54,8 @@ function generatePositions(count) {
 let mappingCameras = [];
 let mappingSetores = [];
 let mappingZones = [];
-// null = criação; id numérico = edição da zona correspondente.
 let editingZoneId = null;
-// true somente quando a seleção na tela reflete as associações reais da zona.
 let zoneEpisReady = false;
-// Invalida o carregamento de EPIs de uma abertura anterior do modal.
 let zoneModalToken = 0;
 
 /**
@@ -71,10 +68,8 @@ let zoneModalToken = 0;
  */
 function zoneEpiIds(zone) {
     if (!Array.isArray(zone?.epis_id)) return null;
-
     const ids = zone.epis_id.map(item =>
         Number(typeof item === "object" && item !== null ? item.id : item));
-
     return ids.every(Number.isInteger) ? ids : null;
 }
 
@@ -157,10 +152,14 @@ async function loadRiskZones(cameras = mappingCameras) {
     mappingZones = result.data;
     list.innerHTML = mappingZones.length ? mappingZones.map(zone => {
         const camera = cameras.find(item => item.id === zone.id_camera);
+        const pontosQtd = Array.isArray(zone.poligono) ? zone.poligono.length : 0;
         return `
             <div style="padding:12px 0;border-bottom:1px solid var(--border)">
                 <strong>${escapeHtml(zone.nome || `Zona ${zone.id}`)}</strong>
-                <p class="text-muted">${escapeHtml(camera?.nome || `Câmera ${zone.id_camera}`)}</p>
+                <p class="text-muted">
+                    ${escapeHtml(camera?.nome || `Câmera ${zone.id_camera}`)}
+                    ${pontosQtd ? ` · ${pontosQtd} vértices` : ""}
+                </p>
                 <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
                     <span class="badge ${zone.permitido ? "success" : "danger"}">${zone.permitido ? "Permitida" : "Restrita / de risco"}</span>
                     <button class="btn secondary" type="button" data-edit-zone="${escapeHtml(zone.id)}">
@@ -306,8 +305,8 @@ function openZoneModal(zone = null) {
 
     document.getElementById("zoneModalTitle").textContent = editing ? "Editar zona" : "Criar nova zona";
     document.getElementById("zoneModalHint").textContent = editing
-        ? "Os dados abaixo são os atuais da zona. Redesenhe a área para alterá-la. A troca de câmera está indisponível nesta edição."
-        : "Escolha uma câmera e desenhe a área da zona sobre a imagem.";
+        ? "Os dados abaixo são os atuais da zona. Adicione ou limpe os pontos para alterá-la."
+        : "Escolha uma câmera e marque os pontos do polígono da zona sobre a imagem.";
     document.getElementById("saveZoneLabel").textContent = editing ? "Salvar zona" : "Criar zona";
 
     // Os IDs reais chegam em `epis_id`; null (campo ausente ou fora do formato)
@@ -319,7 +318,7 @@ function openZoneModal(zone = null) {
 
     const token = ++zoneModalToken;
     loadZoneEpis(epiIds || [], token).then(applied => {
-        if (token !== zoneModalToken) return;  // O modal já foi reaberto em outra zona.
+        if (token !== zoneModalToken) return;
         zoneEpisReady = applied && epiIds !== null;
         if (editing && !zoneEpisReady) {
             document.getElementById("zoneEpiGroup").hidden = true;
@@ -332,15 +331,10 @@ function openZoneModal(zone = null) {
         document.getElementById("zoneName").value = zone.nome || "";
         document.getElementById("zoneAllowed").checked = zone.permitido === true;
 
-        const area = {
-            x: Number(zone.x), y: Number(zone.y),
-            largura: Number(zone.largura), altura: Number(zone.altura)
-        };
-        const known = Object.values(area).every(Number.isFinite);
-        // A câmera precisa existir na lista real para o stream ser carregado.
+        const poligono = Array.isArray(zone.poligono) ? zone.poligono : [];
         zoneAreaEditor.load(
             mappingCameras.some(camera => camera.id === zone.id_camera) ? Number(zone.id_camera) : null,
-            known ? area : null
+            poligono.length >= 3 ? poligono : null
         );
     }
 
@@ -357,7 +351,7 @@ function configureZoneCreation() {
     const cameraSelect = document.getElementById("zoneCamera");
     const areaEditor = new ZoneAreaEditor();
     zoneAreaEditor = areaEditor;
-    // Uma única assinatura no container: as caixas são recriadas a cada abertura.
+
     document.getElementById("zoneEpiOptions")?.addEventListener("change", updateZoneEpiSummary);
     cameraSelect.addEventListener("change", () => {
         const cameraId = Number(cameraSelect.value);
@@ -372,10 +366,11 @@ function configureZoneCreation() {
         form.reset();
         editingZoneId = null;
         zoneEpisReady = false;
-        zoneModalToken++;  // Descarta um carregamento de EPIs ainda em voo.
+        zoneModalToken++;
         modal.classList.remove("active");
         openButton.focus();
     };
+
     openButton.addEventListener("click", () => openZoneModal());
     document.getElementById("closeZoneModal").addEventListener("click", close);
     document.getElementById("cancelZoneModal").addEventListener("click", close);
@@ -398,15 +393,19 @@ function configureZoneCreation() {
             nome: fields.get("nome").trim(),
             permitido: fields.has("permitido")
         };
+
         if (!zone.nome || !mappingCameras.some(camera => camera.id === zone.id_camera)) {
             showToast("Informe o nome da zona e selecione uma câmera cadastrada.", "warning");
             return;
         }
+
         const selection = areaEditor.getSelection(zone.id_camera);
         if (!selection) {
-            showToast(areaEditor.ready ? "Desenhe uma área válida sobre a imagem da câmera." : "Aguarde uma imagem disponível da câmera para definir a zona.", "warning");
+            showToast(areaEditor.ready ? "Defina um polígono válido com pelo menos 3 pontos sobre a imagem." : "Aguarde uma imagem disponível da câmera para definir a zona.", "warning");
             return;
         }
+
+        // Atribui o campo { poligono: [[x, y], ...] }
         Object.assign(zone, selection);
 
         // Na criação, a lista explícita (inclusive vazia) define as associações.
@@ -417,6 +416,7 @@ function configureZoneCreation() {
         saveButton.disabled = true;
         cameraSelect.disabled = true;
         areaEditor.setBusy(true);
+
         try {
             const result = editing
                 ? await apiPut(`/zonas/${editingZoneId}`, zone)

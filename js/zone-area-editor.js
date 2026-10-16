@@ -6,56 +6,112 @@ class ZoneAreaEditor {
         this.stage = document.getElementById("zoneFrameStage");
         this.media = document.getElementById("zoneFrameMedia");
         this.overlay = document.getElementById("zoneAreaOverlay");
-        this.rectangle = document.getElementById("zoneAreaRect");
+        this.polygon = document.getElementById("zoneAreaPolygon");
+        this.pointsGroup = document.getElementById("zonePointsGroup");
         this.status = document.getElementById("zoneAreaStatus");
         this.resetButton = document.getElementById("resetZoneArea");
+        this.undoButton = document.getElementById("undoZonePoint");
         this.retryButton = document.getElementById("retryZoneFrame");
         this.version = 0;
         this.busy = false;
+        this.points = [];
+
         this.clear();
+
         this.resetButton.addEventListener("click", () => this.resetSelection());
+        if (this.undoButton) {
+            this.undoButton.addEventListener("click", () => this.undoPoint());
+        }
         this.retryButton.addEventListener("click", () => this.load(this.cameraId, this.initialSelection));
-        this.overlay.addEventListener("pointerdown", event => {
-            if (!this.ready || this.busy || !event.isPrimary || event.button !== 0) return;
+
+        this.overlay.addEventListener("click", event => {
+            if (!this.ready || this.busy || event.button !== 0) return;
             event.preventDefault();
-            this.resetSelection();
-            this.drag = { id: event.pointerId, start: this.point(event) };
-            this.overlay.setPointerCapture(event.pointerId);
+
+            const pt = this.point(event);
+            this.points.push([Number(pt.x.toFixed(4)), Number(pt.y.toFixed(4))]);
+            this.renderPolygon();
         });
-        this.overlay.addEventListener("pointermove", event => {
-            if (this.drag?.id !== event.pointerId) return;
-            this.updateRectangle(event);
-        });
-        this.overlay.addEventListener("pointerup", event => {
-            if (this.drag?.id !== event.pointerId) return;
-            this.updateRectangle(event);
-            this.endDrag();
-            if (!this.validSelection()) {
-                this.resetSelection("Área muito pequena. Arraste para selecionar uma área maior.");
-            } else {
-                this.status.textContent = "Área selecionada. Você pode desenhar novamente ou redefinir.";
-            }
-        });
-        ["pointercancel", "lostpointercapture"].forEach(type => {
-            this.overlay.addEventListener(type, () => {
-                if (this.drag) this.resetSelection("Seleção interrompida. Desenhe a área novamente.");
-            });
-        });
+
         this.overlay.addEventListener("dragstart", event => event.preventDefault());
     }
 
-    endDrag() {
-        const id = this.drag?.id;
-        this.drag = null;
-        if (id !== undefined && this.overlay.hasPointerCapture(id)) this.overlay.releasePointerCapture(id);
+    undoPoint() {
+        if (!this.points.length || this.busy) return;
+        this.points.pop();
+        this.renderPolygon();
     }
 
-    resetSelection(message = "Nenhuma área selecionada. Arraste sobre a imagem.") {
-        this.endDrag();
-        this.selection = null;
-        this.rectangle.style.display = "none";
+    resetSelection(message = "Nenhum ponto marcado. Clique sobre a imagem para iniciar o polígono.") {
+        this.points = [];
+        if (this.polygon) this.polygon.style.display = "none";
+        if (this.pointsGroup) this.pointsGroup.innerHTML = "";
         this.resetButton.disabled = true;
+        if (this.undoButton) this.undoButton.disabled = true;
         if (this.ready) this.status.textContent = message;
+    }
+
+    renderPolygon() {
+        if (!this.points || this.points.length === 0) {
+            if (this.polygon) {
+                this.polygon.style.display = "none";
+                this.polygon.removeAttribute("points");
+            }
+            if (this.pointsGroup) this.pointsGroup.innerHTML = "";
+            if (this.resetButton) this.resetButton.disabled = true;
+            return;
+        }
+
+        if (this.points.length >= 3) {
+            const pointsAttr = this.points.map(p => `${p[0]},${p[1]}`).join(" ");
+            this.polygon.setAttribute("points", pointsAttr);
+            this.polygon.style.display = "";
+        } else {
+            this.polygon.style.display = "none";
+            this.polygon.removeAttribute("points");
+        }
+
+        const NS = "http://www.w3.org/2000/svg";
+        this.pointsGroup.innerHTML = ""; // Limpa os marcadores anteriores
+
+        this.points.forEach(([x, y], idx) => {
+            const g = document.createElementNS(NS, "g");
+
+            const circle = document.createElementNS(NS, "circle");
+            circle.setAttribute("cx", x);
+            circle.setAttribute("cy", y);
+            circle.setAttribute("r", "0.012");
+            circle.setAttribute("fill", "#3155f5");
+            circle.setAttribute("stroke", "#ffffff");
+            circle.setAttribute("stroke-width", "2");
+            circle.setAttribute("vector-effect", "non-scaling-stroke");
+
+            const text = document.createElementNS(NS, "text");
+            text.setAttribute("x", x);
+            text.setAttribute("y", Math.max(0.02, y - 0.02));
+            text.setAttribute("text-anchor", "middle");
+            text.setAttribute("font-size", "0.035");
+            text.setAttribute("fill", "#ffffff");
+            text.setAttribute("stroke", "#000000");
+            text.setAttribute("stroke-width", "0.004");
+            text.setAttribute("paint-order", "stroke fill");
+            text.setAttribute("style", "pointer-events: none; user-select: none; font-family: sans-serif; font-weight: bold;");
+            text.textContent = String(idx + 1);
+
+            g.appendChild(circle);
+            g.appendChild(text);
+            this.pointsGroup.appendChild(g);
+        });
+
+        if (this.resetButton) this.resetButton.disabled = this.busy;
+
+        if (this.status) {
+            if (this.points.length < 3) {
+                this.status.textContent = `${this.points.length} ponto(s) marcado(s). Marque pelo menos 3 pontos para formar a área.`;
+            } else {
+                this.status.textContent = `${this.points.length} pontos marcados. Área definida com sucesso!`;
+            }
+        }
     }
 
     stopMedia() {
@@ -106,6 +162,7 @@ class ZoneAreaEditor {
         this.status.textContent = "Carregando imagem da câmera…";
         let dimensions = "";
         let connected = false;
+
         const checkImage = () => {
             if (!current() || !image.naturalWidth || !image.naturalHeight) return;
             const nextDimensions = `${image.naturalWidth}x${image.naturalHeight}`;
@@ -117,13 +174,14 @@ class ZoneAreaEditor {
             clearTimeout(this.loadTimer);
             this.applyInitialSelection();
         };
-        // MJPEG pode expor dimensões antes de emitir load (a resposta é contínua).
+
         image.onload = checkImage;
         image.onerror = () => { if (current()) this.unavailable(); };
         this.media.appendChild(image);
         this.sizeTimer = setInterval(checkImage, 150);
         this.loadTimer = setTimeout(() => { if (current()) this.unavailable(); }, 12000);
         image.src = apiVideoUrl(cameraId);
+
         const checkConnection = async () => {
             this.healthDeadline = setTimeout(() => { if (current()) this.unavailable(); }, 8000);
             try {
@@ -149,54 +207,42 @@ class ZoneAreaEditor {
         // O elemento img tem o tamanho exato do frame, sem borda, padding ou crop.
         const bounds = this.image.getBoundingClientRect();
         const clamp = value => Math.max(0, Math.min(1, value));
-        return { x: clamp((event.clientX - bounds.left) / bounds.width),
-            y: clamp((event.clientY - bounds.top) / bounds.height) };
+        return {
+            x: clamp((event.clientX - bounds.left) / bounds.width),
+            y: clamp((event.clientY - bounds.top) / bounds.height)
+        };
     }
 
-    updateRectangle(event) {
-        const end = this.point(event);
-        const start = this.drag.start;
-        const x = Math.min(start.x, end.x), y = Math.min(start.y, end.y);
-        this.selection = { x, y,
-            largura: Math.min(Math.abs(end.x - start.x), 1 - x),
-            altura: Math.min(Math.abs(end.y - start.y), 1 - y) };
-        this.drawSelection(this.selection);
-        this.status.textContent = "Solte para confirmar a área.";
-    }
-
-    drawSelection(selection) {
-        this.selection = { ...selection };
-        const { x, y, largura, altura } = this.selection;
-        Object.entries({ x, y, width: largura, height: altura }).forEach(([key, value]) => {
-            this.rectangle.setAttribute(key, value);
-        });
-        this.rectangle.style.display = "";
-        this.resetButton.disabled = this.busy;
-    }
-
-    // Sem área inicial (criação) o comportamento é o mesmo de resetSelection.
     applyInitialSelection() {
         this.resetSelection();
         if (!this.initialSelection) return;
-        this.drawSelection(this.initialSelection);
-        if (this.ready) this.status.textContent = "Área atual da zona. Arraste sobre a imagem para redesenhar.";
+
+        const pts = Array.isArray(this.initialSelection)
+            ? this.initialSelection
+            : this.initialSelection.poligono;
+
+        if (Array.isArray(pts) && pts.length >= 3) {
+            this.points = pts.map(p => [Number(p[0]), Number(p[1])]);
+            this.renderPolygon();
+            if (this.ready) this.status.textContent = `Área atual da zona carregada (${this.points.length} pontos). Clique para adicionar ou redefina.`;
+        }
     }
 
     validSelection() {
-        const s = this.selection;
-        // 2% de cada dimensão exibida: escala com a imagem, inclusive no mobile.
-        return this.ready && s && Object.values(s).every(Number.isFinite) &&
-            s.x >= 0 && s.y >= 0 && s.largura >= 0.02 && s.altura >= 0.02 &&
-            s.x + s.largura <= 1 && s.y + s.altura <= 1;
+        return this.ready && Array.isArray(this.points) && this.points.length >= 3 &&
+            this.points.every(p => Array.isArray(p) && p.length === 2 &&
+                typeof p[0] === "number" && typeof p[1] === "number" &&
+                p[0] >= 0 && p[0] <= 1 && p[1] >= 0 && p[1] <= 1);
     }
 
     getSelection(cameraId) {
-        return this.cameraId === cameraId && !this.drag && this.validSelection() ? { ...this.selection } : null;
+        return this.cameraId === cameraId && this.validSelection() ? { poligono: [...this.points] } : null;
     }
 
     setBusy(busy) {
         this.busy = busy;
-        this.resetButton.disabled = busy || !this.selection;
+        this.resetButton.disabled = busy || !this.points.length;
+        if (this.undoButton) this.undoButton.disabled = busy || !this.points.length;
         this.retryButton.disabled = busy;
         this.overlay.classList.toggle("is-busy", busy);
     }
