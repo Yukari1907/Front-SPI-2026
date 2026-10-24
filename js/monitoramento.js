@@ -510,10 +510,36 @@ function renderZonasOverlay() {
         `;
     });
 
-    overlay.innerHTML = fragments.join("");
+    // Reutiliza grupos inalterados; substitui apenas a zona cujo desenho mudou.
+    const groups = new Map([...overlay.children].map(group => [group.dataset.id, group]));
+    const seen = new Set();
+    fragments.forEach((markup, index) => {
+        const id = String(currentCameraZonas[index].id);
+        if (!markup || seen.has(id)) return;
+        seen.add(id);
+        let group = groups.get(id);
+        if (!group || group._zonaMarkup !== markup) {
+            const draft = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            draft.innerHTML = markup;
+            const replacement = draft.firstElementChild;
+            replacement._zonaMarkup = markup;
+            if (group) group.replaceWith(replacement);
+            group = replacement;
+        }
+        if (overlay.children[seen.size - 1] !== group) overlay.insertBefore(group, overlay.children[seen.size - 1] || null);
+    });
+    groups.forEach((group, id) => { if (!seen.has(id)) group.remove(); });
 }
 
 const CAMERA_ROTATIONS = [0, 90, 180, 270];
+
+// Máscara fixa exibida a quem não pode ver o endereço: o valor real nunca entra
+// no DOM desses perfis e a máscara nunca é enviada como `ip`.
+const CAMERA_IP_MASK = "••••••••••••";
+// Câmera aberta no modal; o PUT usa o id e o endereço dela, não a seleção atual.
+let editingCamera = null;
+
+const validCameraIp = ip => typeof ip === "string" && ip.trim() !== "" && ip.length <= 255 && ip !== CAMERA_IP_MASK;
 
 function renderCameraSectorOptions(camera) {
     const select = document.getElementById("cameraSector");
@@ -543,12 +569,22 @@ function configureCameraEditing() {
         error.hidden = !message;
     };
 
+    const ipField = document.getElementById("cameraIp");
+    const ipHint = document.getElementById("cameraIpHint");
+    const lockIpField = () => {
+        ipField.value = "";
+        ipField.type = "password";
+        ipField.disabled = true;
+        ipHint.hidden = false;
+    };
+
     const close = () => {
         if (saveButton.disabled) return;
         form.reset();
-        modal.classList.remove("active");
+        lockIpField();
+        editingCamera = null;
         showError("");
-        openButton.focus();
+        closeModal(modal);
     };
 
     openButton.addEventListener("click", () => {
@@ -559,11 +595,25 @@ function configureCameraEditing() {
             return;
         }
 
+        editingCamera = camera;
         showError("");
         document.getElementById("cameraModalHint").textContent =
             `Configuração da câmera ${camera.id}${camera.nome ? ` — ${camera.nome}` : ""}.`;
         document.getElementById("cameraName").value = camera.nome || "";
-        document.getElementById("cameraIp").value = camera.ip || "";
+
+        const canEditIp = canPerform("cameras:edit-address");
+        lockIpField();
+        if (canEditIp) {
+            ipField.type = "text";
+            ipField.disabled = false;
+            ipField.value = camera.ip || "";
+            ipHint.hidden = true;
+        } else {
+            ipField.value = CAMERA_IP_MASK;
+            if (!validCameraIp(camera.ip)) {
+                showError("O endereço atual desta câmera não foi carregado. Para não sobrescrevê-lo, o salvamento fica bloqueado; atualize a página.");
+            }
+        }
 
         if (!renderCameraSectorOptions(camera)) {
             showError("Nenhum setor disponível. A câmera precisa pertencer a um setor cadastrado.");
@@ -579,8 +629,7 @@ function configureCameraEditing() {
             ? "Rotação e espelhamento atuais da câmera."
             : "Não foi possível confirmar a rotação e o espelhamento atuais. Ao salvar, os valores escolhidos substituirão os anteriores.";
 
-        modal.classList.add("active");
-        document.getElementById("cameraName").focus();
+        openModal(modal, document.getElementById("cameraName"));
     });
 
     document.getElementById("closeCameraModal").addEventListener("click", close);
@@ -588,35 +637,27 @@ function configureCameraEditing() {
     modal.addEventListener("click", event => {
         if (event.target === modal) close();
     });
-    document.addEventListener("keydown", event => {
-        if (event.key === "Escape" && modal.classList.contains("active")) close();
-        if (event.key === "Tab" && modal.classList.contains("active")) {
-            const controls = [...modal.querySelectorAll("button, input, select")]
-                .filter(element => !element.disabled && element.getClientRects().length);
-            const first = controls[0], last = controls.at(-1);
-            if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last.focus();
-            } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first.focus();
-            }
-        }
-    });
+    bindModalKeyboard(modal, close);
 
     form.addEventListener("submit", async event => {
         event.preventDefault();
-        if (!canPerform("cameras:edit") || saveButton.disabled || !form.reportValidity()) return;
+        const camera = editingCamera;
+        if (!camera || !canPerform("cameras:edit") || saveButton.disabled || !form.reportValidity()) return;
 
-        const cameraId = currentCameraId;
+        const cameraId = camera.id;
         const fields = new FormData(form);
         const nome = String(fields.get("nome") || "").trim();
-        const ip = String(fields.get("ip") || "").trim();
+        const canEditIp = canPerform("cameras:edit-address");
+        // O PUT substitui os seis campos. Sem permissão, o campo nunca é lido —
+        // mesmo reabilitado pelo DOM — e o endereço repete o que o backend devolveu.
+        const ip = canEditIp ? String(fields.get("ip") || "").trim() : camera.ip;
         const idSetor = Number(fields.get("id_setor"));
         const rotacao = Number(fields.get("rotacao"));
 
-        if (!ip) {
-            showError("Informe o endereço/IP da câmera.");
+        if (!validCameraIp(ip)) {
+            showError(canEditIp
+                ? "Informe o endereço/IP da câmera."
+                : "O endereço atual desta câmera não foi carregado. Para não sobrescrevê-lo, o salvamento fica bloqueado; atualize a página.");
             return;
         }
         if (!Number.isInteger(idSetor)) {

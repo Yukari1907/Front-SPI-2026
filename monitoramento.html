@@ -117,7 +117,7 @@
 
     </main>
 
-<div class="modal" id="cameraModal" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle">
+<div class="modal" id="cameraModal" role="dialog" aria-modal="true" aria-labelledby="cameraModalTitle" aria-describedby="cameraModalHint">
     <div class="modal-box" style="width:min(720px,96vw)">
         <button class="modal-close" id="closeCameraModal" type="button" aria-label="Fechar">&times;</button>
 
@@ -135,9 +135,10 @@
 
                 <div class="form-group">
                     <label for="cameraIp">Endereço / IP da câmera</label>
-                    <input id="cameraIp" name="ip" type="password" autocomplete="off" maxlength="255" required
-                        placeholder="Ex.: rtsp://10.20.30.41:554/stream">
-                    <small class="text-muted">Endereço oculto para proteger as credenciais da câmera.</small>
+                    <!-- Admin: texto editável. Demais perfis: máscara fixa, desabilitada; o valor real nunca entra no DOM. -->
+                    <input id="cameraIp" name="ip" type="password" autocomplete="off" spellcheck="false" maxlength="255" required disabled
+                        aria-describedby="cameraIpHint">
+                    <small class="text-muted" id="cameraIpHint">Endereço oculto para proteger as credenciais da câmera.</small>
                 </div>
 
                 <div class="form-group">

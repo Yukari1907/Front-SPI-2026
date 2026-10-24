@@ -92,13 +92,13 @@
     </main>
 
 
-<div class="modal" id="userModal">
+<div class="modal" id="userModal" role="dialog" aria-modal="true" aria-labelledby="userModalTitle" aria-describedby="userModalHint">
     <div class="modal-box">
-        <button class="modal-close" id="closeUserModal" type="button">&times;</button>
+        <button class="modal-close" id="closeUserModal" type="button" aria-label="Fechar">&times;</button>
 
         <div class="page-title" style="margin-bottom:20px">
             <h2 id="userModalTitle">Cadastrar novo usuário</h2>
-            <p class="text-muted">Informe os dados e o perfil de acesso.</p>
+            <p class="text-muted" id="userModalHint">Informe os dados e o perfil de acesso.</p>
         </div>
 
         <form id="userForm">
@@ -135,8 +135,8 @@
                 </div>
 
                 <div class="form-group">
-                    <label>Status</label>
-                    <input value="Definido no cadastro pelo sistema" disabled>
+                    <label for="signupStatusInfo">Status</label>
+                    <input id="signupStatusInfo" value="Definido no cadastro pelo sistema" disabled>
                 </div>
             </div>
 

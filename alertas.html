@@ -97,7 +97,7 @@
     </main>
 
 
-<div class="modal" id="alertDetailsModal">
+<div class="modal" id="alertDetailsModal" role="dialog" aria-modal="true" aria-labelledby="alertDetailTitle" aria-describedby="alertDetailHint">
     <div class="modal-box" style="width:min(760px,96vw)">
         <button
             class="modal-close"
@@ -110,7 +110,7 @@
 
         <div class="page-title" style="margin-bottom:20px">
             <h2 id="alertDetailTitle">Detalhes do alerta</h2>
-            <p class="text-muted">
+            <p class="text-muted" id="alertDetailHint">
                 Informações completas da ocorrência detectada.
             </p>
         </div>

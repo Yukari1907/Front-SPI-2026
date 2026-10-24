@@ -111,12 +111,17 @@ function openUserModal() {
         return;
     }
     $("userForm").reset();
-    $("userModal").classList.add("active");
+    openModal($("userModal"), $("signupName"));
 }
 
 function closeUserModal() {
-    $("userModal").classList.remove("active");
+    // A senha inicial não fica no formulário fechado.
+    $("userForm").reset();
+    closeModal($("userModal"), $("openUserModal"));
 }
+
+// Fechar pelo usuário espera o cadastro em curso; o sucesso fecha diretamente.
+const dismissUserModal = () => { if (!signupPending) closeUserModal(); };
 
 document.addEventListener("DOMContentLoaded", async () => {
     if (!await window.sessionReady) return;
@@ -134,19 +139,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     $("closeUserModal").addEventListener(
         "click",
-        closeUserModal
+        dismissUserModal
     );
 
     $("cancelUserModal").addEventListener(
         "click",
-        closeUserModal
+        dismissUserModal
     );
+    bindModalKeyboard($("userModal"), dismissUserModal);
 
     $("refreshUsers").addEventListener("click", loadUsers);
 
     $("userModal").addEventListener("click", event => {
         if (event.target === $("userModal")) {
-            closeUserModal();
+            dismissUserModal();
         }
     });
 

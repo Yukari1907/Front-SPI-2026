@@ -9,7 +9,9 @@ const { setTimeout: sleep } = require('node:timers/promises');
 const root = path.resolve(__dirname, '..');
 const passed = [], errors = [], calls = [], videoCalls = [], writes = [], connections = new Set();
 const check = name => { passed.push(name); console.log('PASS', name); };
-const zone = (id, nome = `Zona ${id}`, x = .1) => ({ id, nome, x, y: .2, largura: .3, altura: .4, permitido: false });
+// Contrato atual (ZonaDTO.poligono): o retângulo histórico (x, .2, .3, .4) como 4 vértices.
+const rectPolygon = (x, y, width, height) => [[x, y], [x + width, y], [x + width, y + height], [x, y + height]];
+const zone = (id, nome = `Zona ${id}`, x = .1) => ({ id, nome, poligono: rectPolygon(x, .2, .3, .4), permitido: false });
 let zones = [zone(1), zone(2)], zonesStatus = 200, zoneGate = null;
 let videoStatus = 200, videoMode = 'image', frame, holdFrames = false;
 let detectionStatus = 200;
@@ -117,7 +119,8 @@ const eventually = async predicate => {
         zones = [zone(1, 'Zona atualizada', .25), zone(2), zone(3)];
         await tick(14999); assert.equal(zonesCalls(), 1);
         await tick(1); assert.equal(zonesCalls(), 2);
-        assert.equal(await page.locator('#zonasOverlay [data-id="1"] rect').getAttribute('x'), '25.00%');
+        assert.deepEqual((await page.locator('#zonasOverlay [data-id="1"] polygon').getAttribute('points')).split(' ')
+            .map(pair => pair.split(',').map(Number)), rectPolygon(.25, .2, .3, .4));
         assert.match(await page.locator('#zonasOverlay').textContent(), /Zona atualizada/);
         assert.equal(await page.locator('#zonasOverlay g').count(), 3);
         assert(await sameStructure());

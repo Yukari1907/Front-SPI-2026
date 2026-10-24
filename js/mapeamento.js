@@ -57,6 +57,7 @@ let mappingZones = [];
 let editingZoneId = null;
 let zoneEpisReady = false;
 let zoneModalToken = 0;
+let zoneDeletePending = false;
 
 /**
  * IDs dos EPIs associados a uma zona, como o backend atual os devolve em `epis_id`.
@@ -187,13 +188,21 @@ async function loadRiskZones(cameras = mappingCameras) {
     });
 }
 
+function setZoneDeleteButtonsDisabled(disabled) {
+    document.querySelectorAll("[data-delete-zone]").forEach(button => { button.disabled = disabled; });
+}
+
+// Um DELETE por vez: cliques repetidos durante o envio não geram exclusões duplicadas.
+// Só o fluxo foi protegido; a política de perfis (F1) segue pendente de decisão.
 async function deleteZone(id) {
     const zone = mappingZones.find(item => item.id === id);
-    if (!zone) return;
+    if (!zone || zoneDeletePending) return;
 
     const confirmacao = `Deseja realmente excluir a zona "${zone.nome || `Zona ${id}`}"? Esta ação não pode ser desfeita.`;
     if (!confirm(confirmacao)) return;
 
+    zoneDeletePending = true;
+    setZoneDeleteButtonsDisabled(true);
     try {
         const result = await apiDelete(`/zonas/${id}`);
         if (!result.ok) {
@@ -206,6 +215,9 @@ async function deleteZone(id) {
         await loadRiskZones();
     } catch (error) {
         showToast("Erro ao tentar excluir a zona. Tente novamente.", "danger");
+    } finally {
+        zoneDeletePending = false;
+        setZoneDeleteButtonsDisabled(false);
     }
 }
 
@@ -294,23 +306,6 @@ async function loadZoneEpis(selectedIds = [], token = zoneModalToken) {
     return finish(applied);
 }
 
-/**
- * Mantém o Tab dentro do modal aberto, sem alterar a ordem natural do foco.
- */
-function trapModalFocus(modal, event) {
-    const controls = [...modal.querySelectorAll("button, input, select")]
-        .filter(element => !element.disabled && element.getClientRects().length);
-    const first = controls[0], last = controls.at(-1);
-    if (!first) return;
-    if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-    }
-}
-
 let zoneAreaEditor = null;
 
 /**
@@ -367,7 +362,8 @@ function openZoneModal(zone = null) {
     }
 
     modal.classList.add("active");
-    cameraSelect.focus();
+    // Na edição a câmera fica desabilitada e não recebe foco.
+    (editing ? document.getElementById("zoneName") : cameraSelect).focus();
 }
 
 function configureZoneCreation() {
@@ -860,6 +856,9 @@ function configureRegistries() {
     const closeCamera = bindRegistryModal("cameraCreateModal", "openCameraCreateModal", () => {
         if (!canPerform("cameras:create")) return;
         cameraForm.reset();
+        // Admin vê o endereço que digita; o supervisor cria com o campo mascarado,
+        // conforme POST /cameras/registrar (admin, supervisor) — política inalterada.
+        document.getElementById("newCameraIp").type = canPerform("cameras:edit-address") ? "text" : "password";
         setRegistryError("cameraCreateError", "");
         renderCameraSectorOptions();
         if (!mappingSetores.length) {

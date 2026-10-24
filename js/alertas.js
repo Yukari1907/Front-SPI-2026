@@ -262,11 +262,11 @@ function viewAlert(id) {
                 : "none";
     }
 
-    $("alertDetailsModal").classList.add("active");
+    openModal($("alertDetailsModal"), $("closeAlertDetailsFooter"));
 }
 
 function closeAlertModal() {
-    $("alertDetailsModal").classList.remove("active");
+    closeModal($("alertDetailsModal"), $("alertSearch"));
     currentAlertId = null;
 }
 
@@ -342,6 +342,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     $("closeAlertDetailsModal").addEventListener("click", closeAlertModal);
     $("closeAlertDetailsFooter").addEventListener("click", closeAlertModal);
+    bindModalKeyboard($("alertDetailsModal"), closeAlertModal);
 
     $("alertDetailsModal").addEventListener("click", event => {
         if (event.target === $("alertDetailsModal")) {

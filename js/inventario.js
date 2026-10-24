@@ -324,12 +324,12 @@ function openInventoryModal(item = null) {
         });
     }
 
-    $("inventoryModal").classList.add("active");
+    openModal($("inventoryModal"), $("inventoryForm").elements.name);
 }
 
 function closeInventoryModal() {
     if (inventorySaving) return;
-    $("inventoryModal").classList.remove("active");
+    closeModal($("inventoryModal"), $("openInventoryModal"));
 }
 
 function editInventoryItem(id) {
@@ -444,6 +444,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     $("openInventoryModal").onclick = () => openInventoryModal();
     $("closeInventoryModal").onclick = $("cancelInventoryModal").onclick = closeInventoryModal;
+    bindModalKeyboard($("inventoryModal"), closeInventoryModal);
 
     $("inventorySearch").oninput = filterInventory;
     $("inventoryCategory").onchange = $("inventoryStatus").onchange = filterInventory;
@@ -515,8 +516,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                 updateInventoryCategories();
                 inventorySaving = false;
-                closeInventoryModal();
+                // A tabela recriada descarta o botão que abriu o modal; o foco vai ao de cadastro.
                 filterInventory();
+                closeInventoryModal();
                 showToast(existingId ? "EPI atualizado." : "EPI cadastrado.");
             } else {
                 showToast(mutationError(result, "Falha ao salvar EPI."), "danger");

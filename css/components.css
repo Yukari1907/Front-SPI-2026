@@ -507,6 +507,9 @@ img{display:block;max-width:100%}
 .form-group input::placeholder,
 .form-group textarea::placeholder{color:var(--muted)}
 
+/* Bloqueado (ex.: endereço mascarado): sinal visual sem reduzir o contraste. */
+.form-group :is(input, select, textarea):disabled{border-style:dashed;cursor:not-allowed}
+
 .form-group input:focus,
 .form-group select:focus,
 .form-group textarea:focus{
@@ -523,6 +526,10 @@ html[data-theme="dark"] select option{
 .table-card{
     padding:0;
     overflow:hidden;
+}
+
+body[data-page="alerts"] .table-card > .action-buttons{
+    padding:14px 26px 18px;
 }
 
 .table-head{

@@ -23,7 +23,10 @@ function getRolePermissions(role = getCurrentRole()) {
         actions: ["alerts:view", "alerts:manage", "inventory:export",
             ...(manager ? ["inventory:create", "inventory:edit", "inventory:delete", "cameras:edit", "cameras:create", "cameras:delete", "sectors:manage"] : []),
             ...(manager ? ["vision:active-learning"] : []),
-            ...(admin ? ["users:create", "users:list", "vision:workers"] : [])]
+            // Ler e alterar o endereço (RTSP com credenciais) é exclusivo do admin
+            // na interface. O backend ainda aceita PUT de supervisor e devolve `ip`
+            // a qualquer sessão: a garantia definitiva depende do servidor.
+            ...(admin ? ["users:create", "users:list", "vision:workers", "cameras:edit-address"] : [])]
     };
 }
 
@@ -154,9 +157,61 @@ async function logout() {
     window.location.href = "login.html";
 }
 
+// ─────────────────────────────────────────────
+// Modais: foco inicial, Tab contido, Esc e retorno ao acionador
+// ─────────────────────────────────────────────
+const MODAL_FOCUSABLE = "a[href], button, input, select, textarea, [tabindex]:not([tabindex='-1'])";
+
+/**
+ * Mantém o Tab dentro do modal aberto, sem alterar a ordem natural do foco.
+ */
+function trapModalFocus(modal, event) {
+    const controls = [...modal.querySelectorAll(MODAL_FOCUSABLE)]
+        .filter(element => !element.disabled && element.getClientRects().length);
+    const first = controls[0], last = controls.at(-1);
+    if (!first) return;
+    if (!modal.contains(document.activeElement)) {
+        event.preventDefault();
+        (event.shiftKey ? last : first).focus();
+    } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+    }
+}
+
+function openModal(modal, focusTarget) {
+    if (!modal.classList.contains("active")) modal._modalOpener = document.activeElement;
+    modal.classList.add("active");
+    (focusTarget || modal.querySelector(".modal-box " + MODAL_FOCUSABLE))?.focus();
+}
+
+function closeModal(modal, fallback) {
+    if (!modal.classList.contains("active")) return;
+    modal.classList.remove("active");
+    const opener = modal._modalOpener;
+    modal._modalOpener = null;
+    // O acionador pode ter sido recriado (tabela re-renderizada) ou ocultado.
+    const available = element => element?.isConnected && !element.disabled && element.getClientRects().length;
+    if (available(opener)) opener.focus();
+    else if (available(fallback)) fallback.focus();
+}
+
+/** Um único listener por modal: chame uma vez, na inicialização da página. */
+function bindModalKeyboard(modal, close) {
+    document.addEventListener("keydown", event => {
+        if (!modal.classList.contains("active")) return;
+        if (event.key === "Escape") close();
+        else if (event.key === "Tab") trapModalFocus(modal, event);
+    });
+}
+
 function showToast(message,type="success"){
     const container=document.getElementById("toastContainer");
     if(!container)return;
+    container.setAttribute("role","status");
 
     const toast=document.createElement("div");
     toast.className="toast";

@@ -18,9 +18,12 @@ let epiStatus = 200, epiData = [{ id: 5, nome: 'Capacete real', categoria: 'Cabe
 let updateCameraStatus = 200;
 const cameraRequests = [];
 let sessionUser = { id: 1, nome: 'Teste', perfil: 'admin', admin: true, ativo: true };
+// Contrato atual (ZonaDTO.poligono): vértices normalizados [[x, y], ...]. Os
+// cenários históricos usam o mesmo retângulo expresso como polígono de 4 vértices.
+const rectPolygon = (x, y, width, height) => [[x, y], [x + width, y], [x + width, y + height], [x, y + height]];
 let zoneData = [
-    { id: 1, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.1, largura: 0.3, altura: 0.3, permitido: false },
-    { id: 2, nome: 'Área de carga', id_camera: 1, x: 0.5, y: 0.5, largura: 0.2, altura: 0.2, permitido: true }
+    { id: 1, nome: 'Prensa hidráulica', id_camera: 1, poligono: rectPolygon(0.1, 0.1, 0.3, 0.3), permitido: false },
+    { id: 2, nome: 'Área de carga', id_camera: 1, poligono: rectPolygon(0.5, 0.5, 0.2, 0.2), permitido: true }
 ];
 let cameraStatus = 200;
 let cameras = [{ id: 1, nome: 'Entrada', id_setor: 1, status: 'Ativo' }, { id: 2, nome: 'Saída', id_setor: 1, status: 'Desconectado' }, { id: 3, status: 'Inativo' }];
@@ -161,7 +164,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.goto('http://localhost:8765/monitoramento.html');
         await page.waitForFunction(() => document.getElementById('performanceFps').textContent === '15.0');
         assert.match(await page.locator('#detectionsContainer').innerText(), /sem_capacete.*[\s\S]*0\.0%/);
-        assert.match(await page.locator('#detectionsContainer').innerText(), /pessoa: 2/);
+        assert.match(await page.locator('#detectionsContainer').innerText(), /pessoa:2/);
         assert.equal(await page.locator('#performanceFpsBar').evaluate(el => el.style.width), '50%');
         assert.equal(await page.locator('#performanceLatencyBar').evaluate(el => el.style.width), '23%');
         check('Objeto de detecções, class_count independente, confiança zero e métricas');
@@ -226,7 +229,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                 return {
                     image: rect(img),
                     layers: ['videoContainer', 'streamWrapper', 'zonasOverlay'].map(id => rect(document.getElementById(id))),
-                    zone: rect(document.querySelector('#zonasOverlay rect')),
+                    zone: rect(document.querySelector('#zonasOverlay polygon')),
                     card: rect(document.querySelector('.monitoring-grid > .card')),
                     fit: getComputedStyle(img).objectFit,
                     transform: getComputedStyle(img).transform,
@@ -260,7 +263,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                     const cameraId = await page.locator('#cameraSelect').inputValue() === '1' ? '2' : '1';
                     await page.locator('#cameraSelect').selectOption(cameraId);
                     await page.waitForFunction(id => document.querySelector(`[data-camera-status="${id}"]`).textContent === 'Conectada', cameraId);
-                    await page.waitForSelector('#zonasOverlay rect', { state: 'attached' });
+                    await page.waitForSelector('#zonasOverlay polygon', { state: 'attached' });
                     await assertStreamGeometry(dimensions);
                     assert.equal(await page.evaluate(() => String(currentCameraId)), cameraId);
                     assert.match(await page.locator('#videoStream').getAttribute('src'), new RegExp(`/video/${cameraId}\\?fixture=\\d+$`));
@@ -292,7 +295,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.equal(await page.locator('#videoStream').evaluate(img => getComputedStyle(img).aspectRatio), 'auto');
         assert.equal(await page.locator('#videoContainer').evaluate(el => getComputedStyle(el).aspectRatio), 'auto');
         releaseStream(); streamGate = null;
-        await page.waitForSelector('#zonasOverlay rect', { state: 'attached' });
+        await page.waitForSelector('#zonasOverlay polygon', { state: 'attached' });
         await assertStreamGeometry(streamDimensions);
         for (const viewport of [{ width: 390, height: 700 }, { width: 768, height: 500 }, { width: 1440, height: 1000 }]) {
             await page.setViewportSize(viewport);
@@ -310,10 +313,10 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             selectCamera(currentCameraId === 1 ? 2 : 1);
             selectCamera(currentCameraId === 1 ? 2 : 1);
             handleStreamError(oldImage);
-            resolve({ ok: true, data: [{ id: 999, nome: 'Zona antiga', x: 0, y: 0, largura: 1, altura: 1 }] });
+            resolve({ ok: true, data: [{ id: 999, nome: 'Zona antiga', poligono: [[0, 0], [1, 0], [1, 1], [0, 1]] }] });
             await oldZones;
         });
-        await page.waitForSelector('#zonasOverlay rect', { state: 'attached' });
+        await page.waitForSelector('#zonasOverlay polygon', { state: 'attached' });
         await assertStreamGeometry(streamDimensions);
         assert.equal(await page.locator('#zonasOverlay [data-id="999"]').count(), 0);
         assert.equal(await page.locator('#zonasOverlay [data-id="1"]').count(), 1);
@@ -326,7 +329,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.evaluate(() => renderDetectionState({ connected: true, detections: [], class_count: { pessoa: 1 }, fps: 90, latencia_ms: 800 }));
         assert.equal(await page.locator('#performanceFpsBar').evaluate(el => el.style.width), '100%');
         assert.equal(await page.locator('#performanceLatencyBar').evaluate(el => el.style.width), '100%');
-        assert.match(await page.locator('#detectionsContainer').innerText(), /pessoa: 1[\s\S]*Nenhuma detecção recente/);
+        assert.match(await page.locator('#detectionsContainer').innerText(), /pessoa:1[\s\S]*Nenhuma detecção recente/);
         await page.evaluate(() => renderDetectionState({ connected: true, detections: [], class_count: {}, fps: 0, latencia_ms: null }));
         assert.equal(await page.locator('#performanceLatency').innerText(), '—');
         assert.equal(await page.locator('#performanceLatencyBar').evaluate(el => el.style.width), '0%');
@@ -857,23 +860,31 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             window.apiVideoUrl = id => `${original(id)}?fixture=${++connection}`;
         });
         const area = page.locator('#zoneAreaOverlay');
-        const selected = page.locator('#zoneAreaRect');
-        const readArea = () => selected.evaluate(rect => Object.fromEntries(
-            ['x', 'y', 'width', 'height'].map(key => [key, Number(rect.getAttribute(key))])
-        ));
+        const selected = page.locator('#zoneAreaPolygon');
+        // Vértices renderizados no SVG, na ordem em que foram marcados.
+        const readArea = () => selected.evaluate(polygon => (polygon.getAttribute('points') || '').trim()
+            .split(/\s+/).filter(Boolean).map(pair => pair.split(',').map(Number)));
         const near = (a, b, tolerance = 0.005) => assert(Math.abs(a - b) <= tolerance, `${a} ≈ ${b}`);
         const assertArea = async expected => {
             const actual = await readArea();
-            Object.keys(expected).forEach(key => near(actual[key], expected[key]));
+            assert.equal(actual.length, expected.length, `${actual.length} vértices; esperados ${expected.length}`);
+            expected.forEach(([x, y], index) => { near(actual[index][0], x); near(actual[index][1], y); });
         };
-        const drawArea = async (start = [0.1, 0.2], end = [0.4, 0.6]) => {
+        const boundsOf = points => {
+            const xs = points.map(([x]) => x), ys = points.map(([, y]) => y);
+            return { x: Math.min(...xs), y: Math.min(...ys), width: Math.max(...xs) - Math.min(...xs), height: Math.max(...ys) - Math.min(...ys) };
+        };
+        const clickPoints = async points => {
             await area.waitFor({ state: 'visible' });
             await area.scrollIntoViewIfNeeded();
             const bounds = await area.boundingBox();
-            await page.mouse.move(bounds.x + bounds.width * start[0], bounds.y + bounds.height * start[1]);
-            await page.mouse.down();
-            await page.mouse.move(bounds.x + bounds.width * end[0], bounds.y + bounds.height * end[1], { steps: 5 });
-            await page.mouse.up();
+            for (const [x, y] of points) await page.mouse.click(bounds.x + bounds.width * x, bounds.y + bounds.height * y);
+        };
+        // Cada clique acrescenta um vértice: redesenhar começa por "Limpar pontos".
+        const drawArea = async (points = rectPolygon(0.1, 0.2, 0.3, 0.4)) => {
+            await area.waitFor({ state: 'visible' });
+            if (await page.locator('#resetZoneArea').isEnabled()) await page.locator('#resetZoneArea').click();
+            await clickPoints(points);
         };
         const assertEditorGeometry = async dimensions => {
             const geometry = await page.evaluate(() => {
@@ -884,7 +895,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                 const image = document.getElementById('zoneFrame');
                 const modal = document.querySelector('#zoneModal .modal-box');
                 return { image: box(image), overlay: box(document.getElementById('zoneAreaOverlay')),
-                    rect: box(document.getElementById('zoneAreaRect')), natural: [image.naturalWidth, image.naturalHeight],
+                    rect: box(document.getElementById('zoneAreaPolygon')), natural: [image.naturalWidth, image.naturalHeight],
                     fit: getComputedStyle(image).objectFit, overflow: modal.scrollWidth > modal.clientWidth,
                     modal: box(modal), viewport: innerWidth };
             });
@@ -894,7 +905,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             assert.equal(geometry.fit, 'contain');
             assert.equal(geometry.overflow, false);
             assert(geometry.modal.x >= 0 && geometry.modal.x + geometry.modal.width <= geometry.viewport);
-            const normalized = await readArea();
+            const normalized = boundsOf(await readArea());
             near(geometry.rect.x, geometry.image.x + normalized.x * geometry.image.width, 0.2);
             near(geometry.rect.y, geometry.image.y + normalized.y * geometry.image.height, 0.2);
             near(geometry.rect.width, normalized.width * geometry.image.width, 0.2);
@@ -911,7 +922,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
                     assert.deepEqual(await page.locator('#zoneCamera option').evaluateAll(options => options.map(option => option.value)), ['', '1']);
                     await page.locator('#zoneCamera').selectOption('1');
                     await drawArea();
-                    await assertArea({ x: 0.1, y: 0.2, width: 0.3, height: 0.4 });
+                    await assertArea(rectPolygon(0.1, 0.2, 0.3, 0.4));
                     await assertEditorGeometry(dimensions);
                     await assertContrast(page.locator('#zoneAreaStatus'));
                     assert.equal(await area.evaluate(el => getComputedStyle(el).touchAction), 'none');
@@ -926,12 +937,16 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.locator('#openZoneModal').click();
         await page.locator('#zoneCamera').selectOption('1');
         assert.equal(await page.locator('#zoneX, #zoneY, #zoneWidth, #zoneHeight').count(), 0);
-        for (const [start, end] of [
-            [[0.1, 0.2], [0.7, 0.8]], [[0.7, 0.8], [0.1, 0.2]],
-            [[0.7, 0.2], [0.1, 0.8]], [[0.1, 0.8], [0.7, 0.2]]
+        // Antes: arraste nas quatro direções. Agora: o mesmo retângulo marcado a partir
+        // de cada canto, nos dois sentidos; a ordem dos vértices é preservada.
+        for (const order of [
+            [[0.1, 0.2], [0.7, 0.2], [0.7, 0.8], [0.1, 0.8]], [[0.7, 0.8], [0.1, 0.8], [0.1, 0.2], [0.7, 0.2]],
+            [[0.7, 0.2], [0.7, 0.8], [0.1, 0.8], [0.1, 0.2]], [[0.1, 0.8], [0.1, 0.2], [0.7, 0.2], [0.7, 0.8]]
         ]) {
-            await drawArea(start, end);
-            await assertArea({ x: 0.1, y: 0.2, width: 0.6, height: 0.6 });
+            await drawArea(order);
+            await assertArea(order);
+            const bounds = boundsOf(await readArea());
+            for (const [key, value] of Object.entries({ x: 0.1, y: 0.2, width: 0.6, height: 0.6 })) near(bounds[key], value);
         }
         const beforeResize = await readArea();
         for (const width of [390, 768, 1440]) {
@@ -939,37 +954,55 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             await assertEditorGeometry(streamDimensions);
             assert.deepEqual(await readArea(), beforeResize);
         }
-        await drawArea([0.2, 0.3], [1.2, 1.2]);
-        await assertArea({ x: 0.2, y: 0.3, width: 0.8, height: 0.7 });
-        await drawArea([0.8, 0.7], [-0.2, -0.2]);
-        await assertArea({ x: 0, y: 0, width: 0.8, height: 0.7 });
+        // Clamp nos quatro limites: coordenadas fora da imagem viram 0 ou 1.
+        await page.locator('#resetZoneArea').click();
+        await area.evaluate((el, points) => {
+            const bounds = el.getBoundingClientRect();
+            for (const [x, y] of points) el.dispatchEvent(new MouseEvent('click', {
+                bubbles: true, cancelable: true, button: 0,
+                clientX: bounds.left + bounds.width * x, clientY: bounds.top + bounds.height * y
+            }));
+        }, [[1.2, 1.2], [-0.2, -0.2], [1.2, -0.2], [-0.2, 1.2], [0.5, 1.4]]);
+        await assertArea([[1, 1], [0, 0], [1, 0], [0, 1], [0.5, 1]]);
         await page.locator('#resetZoneArea').click();
         assert.equal(await selected.isVisible(), false);
-        await drawArea([0.3, 0.3], [0.301, 0.301]);
+        assert.equal(await page.locator('#zonePointsGroup g').count(), 0);
+        // Mínimo inválido: menos de 3 vértices não formam área e bloqueiam o envio.
+        await clickPoints([[0.3, 0.3], [0.5, 0.5]]);
         assert.equal(await selected.isVisible(), false);
-        assert.match(await page.locator('#zoneAreaStatus').innerText(), /muito pequena/);
+        assert.equal(await page.locator('#zonePointsGroup g').count(), 2);
+        assert.match(await page.locator('#zoneAreaStatus').innerText(), /pelo menos 3 pontos/);
+        await page.locator('#undoZonePoint').click();
+        assert.equal(await page.locator('#zonePointsGroup g').count(), 1);
         await page.locator('#zoneName').fill('Área sem seleção');
         await page.locator('#saveZoneButton').click();
         assert.equal(zoneRequests.length, 0);
-        check('Editor: quatro direções, normalização, resize, clamp em todos os limites, redefinir e mínimo inválido');
+        assert.match(await page.locator('#toastContainer').innerText(), /pelo menos 3 pontos/);
+        check('Editor: vértices a partir dos quatro cantos, normalização, resize, clamp em todos os limites, limpar/desfazer e mínimo inválido');
 
         // Touch real pelo protocolo do Chromium, incluindo captura fora da imagem.
         const cdp = await context.newCDPSession(page);
         await page.setViewportSize({ width: 390, height: 700 });
+        // Antes: arraste touch com preview. Agora: cada toque real marca um vértice.
+        await page.locator('#resetZoneArea').click();
         await area.scrollIntoViewIfNeeded();
         const touchBounds = await area.boundingBox();
         const touchPoint = (x, y) => ({ x: touchBounds.x + touchBounds.width * x, y: touchBounds.y + touchBounds.height * y });
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touchPoint(0.1, 0.2)] });
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [touchPoint(0.7, 0.8)] });
+        const tapped = rectPolygon(0.1, 0.2, 0.6, 0.6);
+        for (const [index, [x, y]] of tapped.entries()) {
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touchPoint(x, y)] });
+            await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+            await page.waitForFunction(count => document.querySelectorAll('#zonePointsGroup g').length === count, index + 1);
+        }
         assert(await selected.isVisible());
-        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-        await assertArea({ x: 0.1, y: 0.2, width: 0.6, height: 0.6 });
+        await assertArea(tapped);
+        // Toque cancelado não acrescenta vértice nem altera o polígono.
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [touchPoint(0.2, 0.3)] });
         await cdp.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
-        assert.equal(await selected.isVisible(), false);
+        await assertArea(tapped);
         await cdp.detach();
         await page.setViewportSize({ width: 1440, height: 1000 });
-        check('Editor: arraste touch real, preview durante arraste e pointercancel');
+        check('Editor: toque real marca vértices e toque cancelado não altera o polígono');
 
         // Câmera B fornecida exclusivamente pela API simulada de teste.
         cameraListData = [...cameras, { id: 2, nome: 'Câmera B', id_setor: 1 }];
@@ -1039,7 +1072,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await area.waitFor({ state: 'visible' });
         await page.locator('#saveZoneButton').click();
         assert.equal(zoneRequests.length, 0);
-        assert.match(await page.locator('#toastContainer').innerText(), /Desenhe uma área válida/);
+        assert.match(await page.locator('#toastContainer').innerText(), /Defina um polígono válido/);
         await drawArea();
         const submittedArea = await readArea();
         for (const status of [400, 0]) {
@@ -1056,8 +1089,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.locator('#saveZoneButton').click();
         await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active') && document.getElementById('riskZonesList').textContent.includes('Zona <img'));
         assert.deepEqual(zoneRequests.at(-1), { method: 'POST', body: {
-            id_camera: 1, nome: 'Zona <img src=x onerror=alert(1)>', x: submittedArea.x, y: submittedArea.y,
-            largura: submittedArea.width, altura: submittedArea.height, permitido: false, ids_epis: []
+            id_camera: 1, nome: 'Zona <img src=x onerror=alert(1)>', poligono: submittedArea, permitido: false, ids_epis: []
         } });
         assert.equal(await page.locator('#riskZonesList img').count(), 0);
         assert.equal(await page.locator('#zoneName').inputValue(), '');
@@ -1137,7 +1169,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         detections = { connected: true, fps: 15, latencia_ms: 46, class_count: {}, detections: [] };
         detectionStatus = 200; streamStatus = 200; streamDimensions = [640, 360];
         sectorData = [{ id: 1, nome: 'Produção' }, { id: 2, nome: 'Expedição' }];
-        zoneData = [{ id: 7, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, permitido: false }];
+        zoneData = [{ id: 7, nome: 'Prensa hidráulica', id_camera: 1, poligono: rectPolygon(0.1, 0.2, 0.3, 0.25), permitido: false }];
         await page.evaluate(() => sessionStorage.clear());
         await page.goto('http://localhost:8765/mapeamento.html');
         await page.waitForFunction(() => document.querySelectorAll('#zoneCamera option').length === 3);
@@ -1195,7 +1227,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active'));
         assert.deepEqual(zoneRequests.at(-1), { method: 'POST', body: {
             id_camera: 1, nome: 'Zona com EPI', permitido: false,
-            x: createdArea.x, y: createdArea.y, largura: createdArea.width, altura: createdArea.height, ids_epis: [5, 6]
+            poligono: createdArea, ids_epis: [5, 6]
         } });
         await page.locator('#openZoneModal').click();
         await epiReady();
@@ -1245,7 +1277,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         check('EPIs da zona: toque no rótulo alterna a seleção, com alvo de toque adequado');
 
         // O backend atual devolve `epis_id: int[]` em toda leitura de zona.
-        zoneData = [{ id: 7, nome: 'Prensa hidráulica', id_camera: 1, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, permitido: false, epis_id: [6, 5] }];
+        zoneData = [{ id: 7, nome: 'Prensa hidráulica', id_camera: 1, poligono: rectPolygon(0.1, 0.2, 0.3, 0.25), permitido: false, epis_id: [6, 5] }];
         await page.evaluate(() => loadRiskZones());
         await page.locator('[data-edit-zone="7"]').click();
         assert.equal(await page.locator('#zoneModalTitle').innerText(), 'Editar zona');
@@ -1258,7 +1290,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         assert.equal(await page.locator('#zoneEpiUnavailable').isVisible(), false);
         assert.deepEqual(await epiChecked(), [5, 6]);
         await area.waitFor({ state: 'visible' });
-        await assertArea({ x: 0.1, y: 0.2, width: 0.3, height: 0.25 });
+        await assertArea(rectPolygon(0.1, 0.2, 0.3, 0.25));
         assert.match(await page.locator('#zoneAreaStatus').innerText(), /Área atual da zona/);
         check('Edição lê os IDs reais em epis_id e pré-seleciona os EPIs associados sobre a área persistida');
 
@@ -1270,7 +1302,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
             assert.equal(zoneRequests.length, before + 1);
             assert.equal(zoneRequests.at(-1).method, 'PUT');
             assert.equal(zoneRequests.at(-1).path, '/zonas/7');
-            assert.deepEqual(zoneRequests.at(-1).body, { id_camera: 1, nome: 'Prensa hidráulica', permitido: false, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, ids_epis: [5, 6] });
+            assert.deepEqual(zoneRequests.at(-1).body, { id_camera: 1, nome: 'Prensa hidráulica', permitido: false, poligono: rectPolygon(0.1, 0.2, 0.3, 0.25), ids_epis: [5, 6] });
             assert(await page.locator('#zoneModal').isVisible());
             assert.equal(await page.locator('#zoneName').inputValue(), 'Prensa hidráulica');
             assert.match(await page.locator('#riskZonesList').innerText(), /Prensa hidráulica/);
@@ -1278,7 +1310,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         check('Área persistida é reenviada sem redesenho; PUT com HTTP 400 e falha de rede preserva o formulário e a lista');
 
         updateZoneStatus = 200;
-        await drawArea([0.5, 0.45], [0.85, 0.8]);
+        await drawArea(rectPolygon(0.5, 0.45, 0.35, 0.35));
         const editedArea = await readArea();
         await page.locator('#zoneName').fill('Prensa revisada');
         await page.locator('#zoneAllowed').check();
@@ -1286,8 +1318,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         await page.waitForFunction(() => !document.getElementById('zoneModal').classList.contains('active')
             && document.getElementById('riskZonesList').textContent.includes('Prensa revisada'));
         assert.deepEqual(zoneRequests.at(-1), { method: 'PUT', path: '/zonas/7', body: {
-            id_camera: 1, nome: 'Prensa revisada', permitido: true, ids_epis: [5, 6],
-            x: editedArea.x, y: editedArea.y, largura: editedArea.width, altura: editedArea.height
+            id_camera: 1, nome: 'Prensa revisada', permitido: true, ids_epis: [5, 6], poligono: editedArea
         } });
         assert.equal('id_epi' in zoneRequests.at(-1).body, false);
         assert.match(await page.locator('#riskZonesList .badge').first().innerText(), /Permitida/);
@@ -1302,7 +1333,7 @@ const check = (name) => { passed.push(name); console.log('PASS', name); };
         // que as associações atuais serão preservadas. Esperar só pelo select habilitado
         // observaria um estado intermediário.
         const openZoneEdit = async (fixture = { epis_id: [5, 6] }) => {
-            zoneData = [{ id: 7, nome: 'Prensa revisada', id_camera: 1, x: 0.1, y: 0.2, largura: 0.3, altura: 0.25, permitido: true, ...fixture }];
+            zoneData = [{ id: 7, nome: 'Prensa revisada', id_camera: 1, poligono: rectPolygon(0.1, 0.2, 0.3, 0.25), permitido: true, ...fixture }];
             await page.evaluate(() => loadRiskZones());
             await page.locator('[data-edit-zone="7"]').click();
             await page.waitForFunction(() => zoneEpisReady === true

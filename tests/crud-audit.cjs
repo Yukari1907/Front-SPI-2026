@@ -6,6 +6,17 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const passed = [], errors = [], calls = [];
 const check = name => { passed.push(name); console.log('PASS', name); };
+// Divergências preexistentes pendentes de decisão de produto (ver PROMPT5_ACABAMENTO_FINAL_FRONTEND.md):
+// as asserções ficam intactas e falham de forma visível, mas não escondem os cenários seguintes.
+const divergences = [];
+const divergence = async (name, run) => {
+    try { await run(); return true; } catch (error) {
+        const message = error.message.split(/\r?\n/)[0];
+        divergences.push({ name, error: message });
+        console.log('DIVERGÊNCIA', name, '-', message);
+        return false;
+    }
+};
 let role = 'admin', status = 200, readStatus = 200, gate = null;
 let sectors = [{ id: 1, nome: 'Produção <b>' }];
 let cameras = [{ id: 1, nome: 'Entrada', ip: 'rtsp://secret@camera.test/live', id_setor: 1, rotacao: 180, espelhar_horizontal: true, espelhar_vertical: false }];
@@ -42,7 +53,7 @@ const makeGate = () => { let release; const promise = new Promise(resolve => { r
                 else if (url.pathname === '/active-learning/status') data = { enabled: false };
                 else if (url.pathname === '/video/lote') data = { tamanho_lote: 6 };
                 else if (url.pathname.startsWith('/alertas/estatisticas')) data = [];
-                else if (url.pathname === '/zonas' || /^\/zonas\/camera\//.test(url.pathname)) data = [{ id: 7, nome: 'Zona real', id_camera: 1, x: .1, y: .1, largura: .2, altura: .2, permitido: false, epis_categoria: ['Cabeça'] }];
+                else if (url.pathname === '/zonas' || /^\/zonas\/camera\//.test(url.pathname)) data = [{ id: 7, nome: 'Zona real', id_camera: 1, poligono: [[.1, .1], [.3, .1], [.3, .3], [.1, .3]], permitido: false, epis_categoria: ['Cabeça'] }];
                 else if (url.pathname === '/cameras/status') data = cameras.map(item => ({ ...item, status: 'Ativo' }));
                 else if (url.pathname.startsWith('/detections/')) data = { connected: true, detections: [], class_count: {} };
                 else if (url.pathname.startsWith('/video/')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"/>' });
@@ -325,15 +336,17 @@ const makeGate = () => { let release; const promise = new Promise(resolve => { r
 
         await visit('mapeamento');
         await page.locator('[data-edit-zone="7"]').waitFor();
-        const deleteZone = page.getByRole('button', { name: 'Excluir zona', exact: true });
-        assert(await deleteZone.isDisabled());
-        await deleteZone.evaluate(button => { button.disabled = false; button.click(); });
-        assert.equal(writes().filter(call => call.path.startsWith('/zonas/')).length, 0);
+        const zoneDeleteBlocked = await divergence('Zona: exclusão desabilitada (admin)', async () => {
+            const deleteZone = page.getByRole('button', { name: 'Excluir zona', exact: true });
+            assert(await deleteZone.isDisabled());
+            await deleteZone.evaluate(button => { button.disabled = false; button.click(); });
+            assert.equal(writes().filter(call => call.path.startsWith('/zonas/')).length, 0);
+        });
         await page.locator('[data-edit-zone="7"]').click();
         assert(await page.locator('#zoneEpiGroup').isHidden());
         assert(await page.locator('#zoneCamera').isDisabled());
         assert.match(await page.locator('#zoneEpiUnavailable').innerText(), /ficam como estão ao salvar/);
-        check('Zona: DELETE preparado sem handler perigoso e associações preservadas na edição');
+        if (zoneDeleteBlocked) check('Zona: DELETE preparado sem handler perigoso e associações preservadas na edição');
 
         // ETAPA 3 — F1 continua SEM correção pelo frontend. POST /zonas/registrar,
         // PUT /zonas/{id} e DELETE /zonas/{id} usam apenas @login_required no backend,
@@ -346,14 +359,16 @@ const makeGate = () => { let release; const promise = new Promise(resolve => { r
         assert.equal(await page.locator('#openZoneModal').isDisabled(), false);
         assert.equal(await page.locator('#openZoneModal[data-permission]').count(), 0);
         assert.equal(await page.locator('[data-edit-zone="7"]').isDisabled(), false);
-        const excluirZonaOperador = page.getByRole('button', { name: 'Excluir zona', exact: true });
-        assert(await excluirZonaOperador.isDisabled());
-        const antesDeZona = writes().length;
-        await excluirZonaOperador.evaluate(button => { button.disabled = false; button.click(); });
-        assert.equal(writes().filter(call => call.method === 'DELETE' && call.path.startsWith('/zonas')).length, 0);
-        assert.equal(writes().length, antesDeZona);
+        const zoneDeleteOperatorBlocked = await divergence('Zona: exclusão desabilitada (operador)', async () => {
+            const excluirZonaOperador = page.getByRole('button', { name: 'Excluir zona', exact: true });
+            assert(await excluirZonaOperador.isDisabled());
+            const antesDeZona = writes().length;
+            await excluirZonaOperador.evaluate(button => { button.disabled = false; button.click(); });
+            assert.equal(writes().filter(call => call.method === 'DELETE' && call.path.startsWith('/zonas')).length, 0);
+            assert.equal(writes().length, antesDeZona);
+        });
         role = 'admin';
-        check('F1 não corrigido no frontend: zona segue liberada a operador e a exclusão nunca emite DELETE');
+        if (zoneDeleteOperatorBlocked) check('F1 não corrigido no frontend: zona segue liberada a operador e a exclusão nunca emite DELETE');
 
         await visit('inventario'); await inventoryIdle();
         await page.locator('#openInventoryModal').click();
@@ -464,11 +479,13 @@ const makeGate = () => { let release; const promise = new Promise(resolve => { r
             assert.equal(await page.locator('#openZoneModal').count(), 1);
             assert.equal(await page.locator('[data-edit-zone]').count(), 1);
             // Exclusao de zona segue desabilitada para todos - adiada para a Etapa 3.
-            const zoneDelete = page.locator('#riskZonesList button', { hasText: 'Excluir zona' });
-            assert.equal(await zoneDelete.count(), 1);
-            assert(await zoneDelete.first().isDisabled());
-            assert.match(await page.locator('#zoneDeleteUnavailable').innerText(), /indisponível/);
-            check(`F1: ${profile} nao recebe controle novo de mutacao de zona; exclusao segue desabilitada (politica de UI, nao autorizacao do backend)`);
+            const zoneDeleteDisabled = await divergence(`Zona: exclusão desabilitada com aviso (${profile})`, async () => {
+                const zoneDelete = page.locator('#riskZonesList button', { hasText: 'Excluir zona' });
+                assert.equal(await zoneDelete.count(), 1);
+                assert(await zoneDelete.first().isDisabled());
+                assert.match(await page.locator('#zoneDeleteUnavailable').innerText(), /indisponível/);
+            });
+            if (zoneDeleteDisabled) check(`F1: ${profile} nao recebe controle novo de mutacao de zona; exclusao segue desabilitada (politica de UI, nao autorizacao do backend)`);
         }
         assert.equal(writes().filter(call => /^\/zonas/.test(call.path)).length, zoneWritesBefore);
         check('F1: nenhuma mutacao de zona foi disparada pela reorganizacao das paginas');
@@ -692,6 +709,7 @@ const makeGate = () => { let release; const promise = new Promise(resolve => { r
         assert.equal(writes().filter(call => /video\/lote|users\//.test(call.path)).length, 0);
         assert.deepEqual(errors, []);
         check('Nenhum POST de lote, escrita insegura de usuários, dado fictício em produção ou exceção JavaScript');
-        console.log(JSON.stringify({ passed: passed.length, pageErrors: errors, backend: 'simulado' }));
+        console.log(JSON.stringify({ passed: passed.length, divergences, pageErrors: errors, backend: 'simulado' }));
+        if (divergences.length) process.exitCode = 1;
     } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exit(1); });

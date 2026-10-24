@@ -5,8 +5,11 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 const passed = [], failures = [], pageErrors = [], writes = [];
+const adminUser = { id: 1, nome: 'Auditoria', perfil: 'admin', admin: true, ativo: true };
+let sessionUser = adminUser;
 const camera = { id: 1, nome: 'Entrada', ip: 'rtsp://audit-user:audit-password@camera.test/live', id_setor: 1, rotacao: 90, espelhar_horizontal: true, espelhar_vertical: false };
-const zones = [7, 8].map((id, index) => ({ id, nome: `Zona ${id}`, id_camera: 1, x: .1, y: .1, largura: .3, altura: .3, permitido: true, epis_id: [5 + index] }));
+// Contrato atual (ZonaDTO.poligono): o retângulo histórico (.1, .1, .3, .3) como 4 vértices.
+const zones = [7, 8].map((id, index) => ({ id, nome: `Zona ${id}`, id_camera: 1, poligono: [[.1, .1], [.4, .1], [.4, .4], [.1, .4]], permitido: true, epis_id: [5 + index] }));
 const epis = [5, 6].map(id => ({ id, nome: `EPI ${id}`, categoria: 'Cabeça', certificado: 'CA123', validade: '2030-01-01', estoque: 10, quantidade_min: 1, em_uso: 2 }));
 const alerts = [1, 2].map(id => ({ id, evento: `Evento ${id}`, data: '2026-09-23 10:00:00', resolvido: false, severidade: 2, tipo_deteccao: 'epi', id_camera: 1, id_zona: 7 }));
 
@@ -27,7 +30,7 @@ const alerts = [1, 2].map(id => ({ id, evento: `Evento ${id}`, data: '2026-09-23
                     else if (url.pathname === '/epis') data = { ...request.postDataJSON(), id: 9 };
                     else if (/^\/epis\/\d+$/.test(url.pathname)) data = { ...request.postDataJSON(), id: Number(url.pathname.split('/').pop()) };
                     else throw Error('Mutação inesperada: ' + url.pathname);
-                } else if (url.pathname === '/session') data = { authenticated: true, user: { id: 1, nome: 'Auditoria', perfil: 'admin', admin: true, ativo: true } };
+                } else if (url.pathname === '/session') data = { authenticated: true, user: sessionUser };
                 else if (url.pathname === '/cameras') data = [camera];
                 else if (url.pathname === '/cameras/status') data = [{ ...camera, status: 'Ativo' }];
                 else if (url.pathname === '/setores') data = [{ id: 1, nome: 'Setor real' }];
@@ -77,18 +80,28 @@ const alerts = [1, 2].map(id => ({ id, evento: `Evento ${id}`, data: '2026-09-23
             assert.deepEqual(Object.keys(writes.at(-1).body).sort(), ['espelhar_horizontal', 'espelhar_vertical', 'id_setor', 'ip', 'nome', 'rotacao']);
             assert.doesNotMatch(await page.evaluate(() => JSON.stringify({ ...sessionStorage, ...localStorage })), /audit-password|audit-user|camera\.test/);
         });
-        await check('Origem da câmera fica mascarada e sai do formulário ao fechar', async () => {
-            await visit('monitoramento');
-            await page.locator('#openCameraModal').click();
-            assert.equal(await page.locator('#cameraIp').getAttribute('type'), 'password');
-            await page.locator('#cancelCameraModal').click();
-            assert.equal(await page.locator('#cameraIp').inputValue(), '');
-            await visit('mapeamento');
-            await page.locator('#openCameraCreateModal').click();
-            assert.equal(await page.locator('#newCameraIp').getAttribute('type'), 'password');
-            await page.locator('#newCameraIp').fill(camera.ip);
-            await page.locator('#cameraCreateModal [data-close-modal]').first().click();
-            assert.equal(await page.locator('#newCameraIp').inputValue(), '');
+        // Antes: mascarada para todos. Prompt 5: legível e editável só para o admin.
+        await check('Origem da câmera: legível só para admin, mascarada para supervisor e fora do formulário ao fechar', async () => {
+            try {
+                for (const user of [adminUser, { ...adminUser, perfil: 'supervisor', admin: false }]) {
+                    sessionUser = user;
+                    await visit('monitoramento');
+                    await page.locator('#openCameraModal').click();
+                    const ip = page.locator('#cameraIp');
+                    assert.equal(await ip.getAttribute('type'), user.admin ? 'text' : 'password');
+                    assert.equal(await ip.inputValue() === camera.ip, user.admin);
+                    assert.equal(await ip.isDisabled(), !user.admin);
+                    await page.locator('#cancelCameraModal').click();
+                    assert.equal(await ip.inputValue(), '');
+                    assert.equal(await ip.getAttribute('type'), 'password');
+                    await visit('mapeamento');
+                    await page.locator('#openCameraCreateModal').click();
+                    assert.equal(await page.locator('#newCameraIp').getAttribute('type'), user.admin ? 'text' : 'password');
+                    await page.locator('#newCameraIp').fill(camera.ip);
+                    await page.locator('#cameraCreateModal [data-close-modal]').first().click();
+                    assert.equal(await page.locator('#newCameraIp').inputValue(), '');
+                }
+            } finally { sessionUser = adminUser; }
         });
         await check('Cache de câmeras mantém TTL em memória, invalidação e limpeza de sessão', async () => {
             await visit('perfil');
